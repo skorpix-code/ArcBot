@@ -749,7 +749,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigint)
 
-    console.rule("[bold cyan]MCP Web Agent[/]")
+    console.rule("[bold cyan]ArcBot[/]")
     console.print("1. Open [bold blue]http://localhost:8000[/] in your browser.")
     console.print("2. Configure your LLM in the Web UI.")
     console.print("3. Press [bold red]Ctrl+C[/] here to quit.")
