@@ -1,10 +1,10 @@
-ArcBot - Local MCP System Agent
+# ArcBot - Local MCP System Agent
 
 ArcBot is a powerful, locally-hosted AI System Agent built on the Model Context Protocol (MCP). It acts as a bridge between Large Language Models (LLMs) and your local operating system, allowing AI to perform real-world tasks like file editing, command execution, and web searching, all while keeping a "Human-in-the-Loop" for security.
 
 It features a modern, reactive web interface (FastAPI + AlpineJS) and supports multiple LLM providers including Ollama, LM Studio, OpenAI, and Google Gemini.
 
-✨ Features
+### ✨ Features
 
     Universal LLM Support: Connect to local models (Ollama, LM Studio) or cloud providers (OpenAI, Gemini).
 
@@ -22,35 +22,60 @@ It features a modern, reactive web interface (FastAPI + AlpineJS) and supports m
 
     Secure Sandbox: All file operations are restricted to a specific directory by default.
 
-🛠️ Prerequisites
+### 🛠️ Prerequisites
 
     Python 3.10 or higher.
 
-    A browser (Chrome, Firefox, Edge, etc.).
+    uv (Optional, but recommended for speed).
 
-📦 Installation
+    A browser
 
-    Clone the repository:
+    LM Studio or Ollama (if using local models)
+
+## 📦 Installation
+
+Clone the repository:
     Bash
 
-    git clone https://github.com/yourusername/arcbot.git
-    cd arcbot
+    git clone https://github.com/skorpix-code/ArcBot.git
+    cd ArcBot
 
-    Create a Virtual Environment (Recommended):
-    Bash
+Install Dependencies:
 
-    # Windows
-    python -m venv venv
-    .\venv\Scripts\activate
+You can set up the project using either uv (recommended) or standard pip.
+#### Option A: Using uv (Fast & Recommended)
 
-    # Linux/macOS
-    python3 -m venv venv
-    source venv/bin/activate
+If you have uv installed, setup is instant.
 
-    Install Dependencies: Create a file named requirements.txt with the content provided below, then run:
-    Bash
+Create a virtual environment:
+    
+Bash
 
-    pip install -r requirements.txt
+        uv venv
+
+Install requirements:
+    
+Bash
+
+        uv pip install -r requirements.txt
+
+#### Option B: Using Standard pip
+
+Create a virtual environment:
+        
+Bash
+
+        python -m venv venv
+        # Windows:
+        .\venv\Scripts\activate
+        # Mac/Linux:
+        source venv/bin/activate
+
+Install requirements:
+        
+Bash
+
+        pip install -r requirements.txt
 
 Dependencies List (requirements.txt)
 
@@ -87,9 +112,6 @@ GOOGLE_API_KEY=your_google_api_key_here
 # If using OpenAI
 OPENAI_API_KEY=your_openai_api_key_here
 
-# Optional: Set specific environment variables for the MCP server context
-# ENV_VAR_NAME=value
-
     Note: You can also enter your API keys directly into the Web UI when you launch the application.
 
 2. Directory Access
@@ -103,31 +125,42 @@ By default, mcp_server.py may have a hardcoded path. You should configure the "S
     You can change it manually now, or use the Web UI later to change it (the agent can rewrite its own config file).
 
 🚀 Usage
+1. Start the Server
 
-    Start the Server: Run the client script, which spins up the web server and manages the MCP connection.
-    Bash
+Run the client script, which spins up the web server and manages the MCP connection.
 
-    python mcp_client.py
+If using uv:
+Bash
 
-    Access the Interface: Open your web browser and navigate to:
+uv run mcp_client_webui.py
 
-    http://localhost:8000
+If using standard python:
+Bash
 
-    Connect an LLM:
+# Ensure your venv is activated first
+python mcp_client_webui.py
 
-        Provider: Select your provider (e.g., Ollama, Google Gemini).
+2. Access the Interface
 
-        API Key: Enter key (if not using local models).
+Open your web browser and navigate to:
 
-        Model: Enter the model name (e.g., deepseek-r1, gemini-2.0-flash-exp).
+http://localhost:8000
 
-        Click Initialize System.
+3. Connect an LLM
 
-    Start Chatting:
+    Provider: Select your provider (e.g., Ollama, Google Gemini).
 
-        Ask the agent to "Create a Python script that calculates fibonacci" or "Search the web for the latest news on AI".
+    API Key: Enter key (if not using local models).
 
-        Security Check: If the agent tries to run a terminal command (like pip install), a red modal will appear asking for your permission.
+    Model: Enter the model name (e.g., deepseek-r1, gemini-2.0-flash-exp).
+
+    Click Initialize System.
+
+4. Start Chatting
+
+    Ask the agent to "Create a Python script that calculates fibonacci" or "Search the web for the latest news on AI".
+
+    Security Check: If the agent tries to run a terminal command (like pip install), a red modal will appear asking for your permission.
 
 🛡️ Security Architecture
 
@@ -141,7 +174,7 @@ ArcBot is designed with a "Human-in-the-Loop" security model.
 
 📁 Project Structure
 
-    mcp_client.py: The FastAPI web server and the MCP Client that talks to the LLM.
+    mcp_client_webui.py: The FastAPI web server and the MCP Client that talks to the LLM.
 
     mcp_server.py: The MCP Server that provides the "Tools" (File editing, command execution, etc.).
 
