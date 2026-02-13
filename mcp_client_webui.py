@@ -2,12 +2,25 @@ import asyncio
 import copy
 import json
 import os
+import platform
 import re
+import shutil
 import signal
 import sys
 import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any, AsyncGenerator, Dict, List, Optional
+
+# --- PTY Support for Interactive Terminal ---
+try:
+    import fcntl
+    import pty
+    import struct
+    import termios
+
+    HAS_PTY = True
+except ImportError:
+    HAS_PTY = False
 
 import uvicorn
 from dotenv import load_dotenv
@@ -39,7 +52,6 @@ except ImportError:
 load_dotenv()
 console = Console()
 
-# --- UNIVERSAL SYSTEM PROMPT (UPDATED) ---
 # --- UNIVERSAL SYSTEM PROMPT ---
 SYSTEM_PROMPT = """You are an advanced System Agent with full authorization to control the local environment. Your primary function is to execute tasks using the Model Context Protocol (MCP) and system commands.
 
@@ -58,24 +70,24 @@ Your home directory is "/home/skorp/Programming/LLM_Coder_Dir". This is where al
 3. **JSON Strictness:** Arguments must be valid JSON. No trailing commas.
 
 **BATCH OPERATIONS & COMPLETION:**
-1. **Do Not Pause:** If the user asks for a repetitive task (e.g., "create 40 files", "delete all txt files"), do NOT stop to ask for confirmation after creating a few.
+1. **Do Not Pause:** If the user asks to repetitive task (e.g., "create 40 files", "delete all txt files"), do NOT stop to ask for confirmation after creating a few.
 2. **Maximize Throughput:** Generate as many tool calls in succession to complete an operation.
 3. **Auto-Continuation:** If you cannot finish the task in one turn (due to output limits), immediately output the next batch of tool calls in your next turn without asking the user "Shall I continue?".
 4. **Silence is Golden:** When performing a mass operation, do not output conversational text like "I have created 5 files." until the ENTIRE task is complete. Just output the Tool Calls.
 
 **THE `execute_command` PROTOCOL:**
 This is your primary tool for OS interaction.
-- **GUI Applications:** You CAN and MUST open GUI apps (Firefox, VS Code, etc.) if requested.
-  - *CRITICAL:* Always append `&` to detach GUI processes so the agent doesn't hang (e.g., `firefox google.com &`).
-- **Non-Interactive:** Do NOT run interactive TUI programs like `nano`, `vim`, `top` (without batch mode), or Python REPLs. Use `cat`, `grep`, `sed`, or simple scripts instead.
+- **Interactive Mode:** The terminal IS interactive. If a command (like `npm init` or `python script.py`) pauses to wait for user input, the tool will return a `[PAUSED]` status with the output so far.
+- **Providing Input:** When you see `[PAUSED]`, check the last line of output. If it's a prompt (e.g., "Proceed? y/n"), simply call `execute_command` again with your answer (e.g., `command="y"`).
+- **GUI Applications:** You CAN open GUI apps. Always append `&` to detach them (e.g., `firefox &`).
 - **Chaining:** You may chain commands with `&&` for efficiency (e.g., `mkdir test && cd test`).
 
 **FORMATTING & FALLBACK:**
 You are configured for native function calling. If that fails, strictly use this XML fallback format:
 
-<tool_call>
+<tool_call]>
 {"name": "tool_name", "arguments": {"arg_name": "value"}}
-</tool_call>
+</tool_call]>
 """
 
 
@@ -95,6 +107,9 @@ class LLMConfig:
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
+
+
+WORKING_DIR = "/home/skorp/Programming/LLM_Coder_Dir"
 
 
 # --- PROVIDERS ---
@@ -143,77 +158,48 @@ class GeminiNativeProvider:
         self.chat_session = None
 
     def _sanitize_schema(self, schema: Any) -> Any:
-        """
-        Recursively removes schema keys that the Google GenAI SDK
-        does not support or validates strictly (like exclusiveMaximum).
-        """
         if isinstance(schema, dict):
-            # Create a copy to avoid modifying the original dictionary in place
             clean = schema.copy()
-
-            # Keys known to cause validation errors in Google GenAI SDK
             unsupported_keys = [
                 "exclusiveMaximum",
                 "exclusiveMinimum",
                 "default",
                 "title",
-                "additionalProperties",  # Sometimes causes issues if True
+                "additionalProperties",
             ]
-
             for key in unsupported_keys:
                 clean.pop(key, None)
-
-            # Recursively clean nested dictionaries (properties, items, etc.)
             for k, v in clean.items():
                 clean[k] = self._sanitize_schema(v)
             return clean
-
         elif isinstance(schema, list):
             return [self._sanitize_schema(item) for item in schema]
-
         return schema
 
     def _convert_tools(self, tools):
         if not tools:
             return None
-
-        # Use a dictionary to deduplicate by name.
-        # Since standard Python dicts preserve insertion order (3.7+),
-        # and later keys overwrite earlier ones, this ensures that if
-        # your local 'execute_command' is added last, it wins.
         unique_tools = {}
-
         for t in tools:
             name = t["function"]["name"]
-
-            # Deep copy parameters to ensure we don't mutate global state
             raw_params = copy.deepcopy(t["function"].get("parameters", {}))
-
-            # Sanitize the parameters schema (remove exclusiveMaximum, etc.)
             clean_params = self._sanitize_schema(raw_params)
-
             unique_tools[name] = {
                 "name": name,
                 "description": t["function"]["description"],
                 "parameters": clean_params,
             }
-
-        # Convert the dictionary values back to a list
         return {"function_declarations": list(unique_tools.values())}
 
     async def chat_stream(self, messages, tools):
         try:
             if self.chat_session is None:
                 tool_config = self._convert_tools(tools)
-
-                # Create the chat config
-                # We strictly ensure tool_config is passed as a list containing the dict
                 gen_config = types.GenerateContentConfig(
                     tools=[tool_config] if tool_config else None,
                     system_instruction=SYSTEM_PROMPT,
                     temperature=0,
                 )
-
                 self.chat_session = self.client.aio.chats.create(
                     model=self.config.model,
                     config=gen_config,
@@ -227,7 +213,6 @@ class GeminiNativeProvider:
                     last_msg["content"]
                 )
             elif last_msg["role"] == "tool":
-                # Google GenAI requires the function response to match the structure
                 part = types.Part.from_function_response(
                     name=last_msg.get("name"), response={"result": last_msg["content"]}
                 )
@@ -236,12 +221,9 @@ class GeminiNativeProvider:
             if response_stream:
                 async for chunk in response_stream:
                     tool_calls_out = []
-                    # Handle function calls from Gemini
                     if chunk.function_calls:
                         for fc in chunk.function_calls:
-                            # Gemini args are already dicts, convert to JSON string for consistency
                             args_json = json.dumps(fc.args) if fc.args else "{}"
-
                             tool_calls_out.append(
                                 {
                                     "id": f"call_{uuid.uuid4().hex[:8]}",
@@ -263,6 +245,250 @@ class GeminiNativeProvider:
             yield {"content": f"Error: {e}", "tool_calls": None, "role": "assistant"}
 
 
+# --- TERMINAL MANAGER (MODIFIED) ---
+class TerminalManager:
+    """Manages persistent and ephemeral PTY sessions with Pause Detection."""
+
+    def __init__(self):
+        self.active_fd = None
+        self.shell_fd = None
+        self.shell_process = None
+
+        # --- Interactive Agent Process State ---
+        self.agent_proc = None
+        self.agent_fd = None
+        self.agent_buffer = []
+        self._shutdown = False
+
+    async def stop(self):
+        """Gracefully stop all running processes."""
+        self._shutdown = True
+
+        # Kill agent process if running
+        if self.agent_proc and self.agent_proc.returncode is None:
+            try:
+                self.agent_proc.terminate()
+                await asyncio.wait_for(self.agent_proc.wait(), timeout=2.0)
+            except:
+                try:
+                    self.agent_proc.kill()
+                except:
+                    pass
+
+        # Kill shell process if running
+        if self.shell_process and self.shell_process.returncode is None:
+            try:
+                self.shell_process.terminate()
+                await asyncio.wait_for(self.shell_process.wait(), timeout=2.0)
+            except:
+                try:
+                    self.shell_process.kill()
+                except:
+                    pass
+
+        # Close file descriptors
+        for fd in [self.agent_fd, self.shell_fd, self.active_fd]:
+            if fd:
+                try:
+                    os.close(fd)
+                except:
+                    pass
+
+        self.agent_fd = None
+        self.shell_fd = None
+        self.active_fd = None
+        self.agent_proc = None
+        self.shell_process = None
+
+    async def start_shell(self):
+        """Starts a persistent background shell (bash/zsh) for user interaction."""
+        if not HAS_PTY or os.name != "posix":
+            return
+
+        shell = os.environ.get("SHELL", "/bin/bash")
+        master, slave = pty.openpty()
+        self.shell_fd = master
+        self.active_fd = master
+
+        self.shell_process = await asyncio.create_subprocess_exec(
+            shell,
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            preexec_fn=os.setsid,
+            cwd=WORKING_DIR,
+        )
+        os.close(slave)
+
+        asyncio.create_task(self._read_loop(master, is_shell=True))
+        console.log(f"[green]Started User Shell: {shell}[/]")
+
+    async def run_interactive_command(
+        self, cmd_input: str, broadcast_func
+    ) -> (str, str):
+        """
+        Runs a command OR sends input to an existing active command.
+
+        Returns: (output_str, status)
+        Status can be: "FINISHED" or "PAUSED"
+        """
+        if self._shutdown:
+            return "Shutdown in progress", "FINISHED"
+
+        if not HAS_PTY:
+            # Fallback for Windows/Non-PTY (No interaction support yet)
+            proc = await asyncio.create_subprocess_shell(
+                cmd_input,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE,
+                cwd=WORKING_DIR,
+            )
+            stdout, stderr = await proc.communicate()
+            return (stdout.decode() + stderr.decode()), "FINISHED"
+
+        # 1. Determine: New Command or Input?
+        # A process is 'active' if it exists and hasn't returned an exit code
+        is_active = self.agent_proc is not None and self.agent_proc.returncode is None
+
+        if not is_active:
+            # --- START NEW COMMAND ---
+            # Cleanup old FD if exists
+            if self.agent_fd:
+                try:
+                    os.close(self.agent_fd)
+                except:
+                    pass
+
+            master, slave = pty.openpty()
+            self.agent_fd = master
+            self.active_fd = master  # Steal UI focus
+
+            # Start process
+            self.agent_proc = await asyncio.create_subprocess_shell(
+                cmd_input,
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                preexec_fn=os.setsid,
+                cwd=WORKING_DIR,
+            )
+            os.close(slave)
+        else:
+            # --- SEND INPUT TO EXISTING ---
+            if self.agent_fd:
+                # Send input + newline
+                input_bytes = (cmd_input + "\n").encode()
+                os.write(self.agent_fd, input_bytes)
+
+        # 2. READ LOOP (With Silence Detection)
+        self.agent_buffer = []
+        loop = asyncio.get_running_loop()
+
+        # Time to wait for output before deciding the process is paused (waiting for input)
+        SILENCE_THRESHOLD = 2.5
+
+        while True:
+            if self._shutdown:
+                break
+
+            # Check if died
+            if self.agent_proc.returncode is not None:
+                break
+
+            try:
+                # Helper to read from FD in thread executor
+                read_fut = loop.run_in_executor(
+                    None, lambda: os.read(self.agent_fd, 1024)
+                )
+
+                # Wait for data OR silence timeout
+                data = await asyncio.wait_for(read_fut, timeout=SILENCE_THRESHOLD)
+
+                if not data:  # EOF
+                    break
+
+                text = data.decode(errors="replace")
+                self.agent_buffer.append(text)
+                await broadcast_func("terminal_data", {"data": text})
+
+            except asyncio.TimeoutError:
+                # Timeout hit!
+                # Check if process is still alive using wait_for(wait(), 0) trick or checking returncode
+                if self.agent_proc.returncode is None:
+                    # It's alive, just silent. We assume it's PAUSED asking for input.
+                    return "".join(self.agent_buffer), "PAUSED"
+                else:
+                    break  # It's dead
+            except OSError:
+                break
+
+        # 3. Process Finished
+        # Ensure we get the return code
+        try:
+            await asyncio.wait_for(self.agent_proc.wait(), 1.0)
+        except:
+            pass  # Forcefully moving on
+
+        ret_code = self.agent_proc.returncode
+
+        # Cleanup State
+        self.agent_proc = None
+        # Restore User Shell Focus
+        if self.shell_fd:
+            self.active_fd = self.shell_fd
+
+        output = "".join(self.agent_buffer)
+        return output, f"FINISHED (Exit Code: {ret_code})"
+
+    async def _read_loop(self, fd, is_shell=False):
+        """Reads output from the User Shell PTY."""
+        loop = asyncio.get_running_loop()
+        while True:
+            if self._shutdown:
+                break
+
+            try:
+                if is_shell and self.active_fd != fd:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                data = await loop.run_in_executor(None, lambda: os.read(fd, 1024))
+                if not data:
+                    break
+
+                text = data.decode(errors="replace")
+                if active_websocket:
+                    await active_websocket.send_json(
+                        {"type": "terminal_data", "data": text}
+                    )
+            except OSError:
+                break
+            except Exception:
+                break
+
+    def write_input(self, data: str):
+        """Writes user input to the CURRENT active FD."""
+        if self.active_fd and not self._shutdown:
+            try:
+                os.write(self.active_fd, data.encode())
+            except OSError:
+                pass
+
+    def resize(self, rows: int, cols: int):
+        """Resizes the PTY window."""
+        if self.active_fd and HAS_PTY and not self._shutdown:
+            try:
+                winsize = struct.pack("HHHH", rows, cols, 0, 0)
+                fcntl.ioctl(self.active_fd, termios.TIOCSWINSZ, winsize)
+            except Exception:
+                pass
+
+
+# Global Terminal Instance
+terminal = TerminalManager()
+
+
 # --- MCP CLIENT ---
 class MCPClient:
     def __init__(self, config: LLMConfig):
@@ -270,16 +496,31 @@ class MCPClient:
         self.exit_stack = AsyncExitStack()
         self.sessions = []
         self.tool_routing = {}
-        # Store pending approvals: request_id -> Future
         self.pending_approvals: Dict[str, asyncio.Future] = {}
+        self._shutdown = False
 
-        # Initialize Provider
         if config.provider == "Google Gemini":
             console.log(f"[bold purple]Initialized Gemini: {config.model}[/]")
             self.llm = GeminiNativeProvider(config)
         else:
             console.log(f"[bold green]Initialized OpenAI/Compatible: {config.model}[/]")
             self.llm = OpenAICompatibleProvider(config)
+
+    async def shutdown(self):
+        """Graceful shutdown."""
+        self._shutdown = True
+
+        # Cancel any pending approvals
+        for req_id, future in self.pending_approvals.items():
+            if not future.done():
+                future.cancel()
+        self.pending_approvals.clear()
+
+        # Close exit stack
+        try:
+            await self.exit_stack.aclose()
+        except:
+            pass
 
     async def connect_to_server(self, name: str, config: Dict):
         console.log(f"Connecting to [cyan]{name}[/]...")
@@ -311,8 +552,6 @@ class MCPClient:
     async def list_tools(self):
         all_tools = []
         self.tool_routing.clear()
-
-        # 1. Fetch tools from connected MCP servers
         for session in self.sessions:
             res = await session.list_tools()
             for tool in res.tools:
@@ -328,20 +567,19 @@ class MCPClient:
                 )
                 self.tool_routing[tool.name] = session
 
-        # 2. Inject Client-Side 'execute_command' tool
-        # Updated description to be more permissive
+        # --- MODIFIED execute_command TOOL DEFINITION ---
         all_tools.append(
             {
                 "type": "function",
                 "function": {
                     "name": "execute_command",
-                    "description": "PRIMARY TOOL. Executes a terminal command. Use this for EVERYTHING: opening apps, reading files, listing directories, system checks. Input is a standard bash command string.",
+                    "description": "Executes a terminal command. IMPORTANT: This tool is INTERACTIVE. If a command (like 'npm init' or 'python script.py') pauses for input (e.g. 'package name:'), I will return the output so far with a [PAUSED] status. You MUST then call `execute_command` again with your input string (e.g., 'my-app' or 'y') to continue execution. To just wait/listen without typing, send an empty string.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "command": {
                                 "type": "string",
-                                "description": "The bash command. Example: 'firefox google.com', 'ls -la', 'cat file.txt'.",
+                                "description": "The bash command OR the input string for a paused process.",
                             }
                         },
                         "required": ["command"],
@@ -349,7 +587,6 @@ class MCPClient:
                 },
             }
         )
-
         return all_tools
 
     async def call_tool(self, name, args):
@@ -365,48 +602,51 @@ class MCPClient:
             except Exception:
                 pass
 
-    # New helper for waiting on UI confirmation
     async def request_confirmation(self, command: str) -> bool:
         request_id = uuid.uuid4().hex
         future = asyncio.get_running_loop().create_future()
         self.pending_approvals[request_id] = future
-
-        # Send request to UI
         await self.broadcast(
             "request_approval", {"requestId": request_id, "command": command}
         )
-
         try:
-            # Wait for the future to be set by the websocket handler
             approved = await future
             return approved
         finally:
             self.pending_approvals.pop(request_id, None)
 
     async def run_chat_loop_web(self):
-        # We start the context manager HERE, inside the task
         try:
             async with self.exit_stack:
                 await self.broadcast("status", {"text": "Initializing Agent..."})
                 await self.initialize_all()
-
                 await self.broadcast("status", {"text": "Discovering Tools..."})
                 tools = await self.list_tools()
-
                 messages = [{"role": "system", "content": SYSTEM_PROMPT}]
                 MAX_RECENT = 25
-
                 console.rule("[bold green]Agent Active[/]")
                 await self.broadcast("status", {"text": "Ready"})
 
-                while True:
-                    user_input = await input_queue.get()
-                    messages.append({"role": "user", "content": user_input})
+                # Start User Shell if on Posix
+                await terminal.start_shell()
 
+                while True:
+                    if self._shutdown:
+                        break
+
+                    user_input = await input_queue.get()
+
+                    if self._shutdown:
+                        break
+
+                    messages.append({"role": "user", "content": user_input})
                     await self.broadcast("status", {"text": "Thinking..."})
                     await self.broadcast("start")
 
                     while True:
+                        if self._shutdown:
+                            break
+
                         response_content, tool_calls_buffer = [], {}
                         msgs_to_send = (
                             [messages[0]] + messages[-MAX_RECENT:]
@@ -415,6 +655,9 @@ class MCPClient:
                         )
 
                         async for chunk in self.llm.chat_stream(msgs_to_send, tools):
+                            if self._shutdown:
+                                break
+
                             if chunk.get("content"):
                                 response_content.append(chunk["content"])
                                 await self.broadcast(
@@ -480,11 +723,13 @@ class MCPClient:
                         await self.broadcast("tool_start")
 
                         for tool_call in history_tool_calls:
+                            if self._shutdown:
+                                break
+
                             fn_name, fn_args_str = (
                                 tool_call["function"]["name"],
                                 tool_call["function"]["arguments"],
                             )
-                            # Broadcast specific tool activity
                             await self.broadcast(
                                 "status", {"text": f"Running: {fn_name}..."}
                             )
@@ -502,8 +747,6 @@ class MCPClient:
                                 await self.broadcast(
                                     "status", {"text": "Waiting for Approval..."}
                                 )
-
-                                # Send request to UI and wait
                                 approved = await self.request_confirmation(cmd)
 
                                 if not approved:
@@ -511,28 +754,48 @@ class MCPClient:
                                     console.print("[red]Blocked by UI.[/]")
                                 else:
                                     console.print(
-                                        "[green]Allowed by UI. Executing...[/]"
+                                        f"[green]Allowed by UI. Executing: {cmd}[/]"
                                     )
+                                    await self.broadcast("terminal_open")
+                                    await self.broadcast(
+                                        "terminal_data",
+                                        {"data": f"\r\n\x1b[32m$ {cmd}\x1b[0m\r\n"},
+                                    )
+
                                     try:
-                                        # ACTUALLY EXECUTE THE COMMAND
-                                        proc = await asyncio.create_subprocess_shell(
-                                            cmd,
-                                            stdout=asyncio.subprocess.PIPE,
-                                            stderr=asyncio.subprocess.PIPE,
+                                        # Use the Interactive Runner
+                                        # Returns (output, status)
+                                        (
+                                            output_str,
+                                            status_str,
+                                        ) = await terminal.run_interactive_command(
+                                            cmd, self.broadcast
                                         )
-                                        stdout, stderr = await proc.communicate()
 
-                                        output = stdout.decode().strip()
-                                        error = stderr.decode().strip()
+                                        # Format result for Agent
+                                        if status_str == "PAUSED":
+                                            result = f"COMMAND STARTED BUT PAUSED (WAITING FOR INPUT).\nOutput so far:\n{output_str}\n\n[SYSTEM]: The process is still running. It is likely waiting for user input (e.g. y/n, password). Call 'execute_command' again with the input string to continue."
+                                            exit_msg = "\r\n\x1b[33m[Paused for Input - Agent Control]\x1b[0m\r\n"
+                                        else:
+                                            result = (
+                                                output_str
+                                                if output_str
+                                                else "(Command executed with no output)"
+                                            )
+                                            exit_msg = (
+                                                f"\r\n\x1b[90m[{status_str}]\x1b[0m\r\n"
+                                            )
 
-                                        result = output
-                                        if error:
-                                            result += f"\nSTDERR: {error}"
-                                        if not result:
-                                            result = "Command executed successfully (no output)."
+                                        await self.broadcast(
+                                            "terminal_data", {"data": exit_msg}
+                                        )
 
                                     except Exception as e:
                                         result = f"Execution failed: {str(e)}"
+                                        await self.broadcast(
+                                            "terminal_data",
+                                            {"data": f"\r\nError: {e}\r\n"},
+                                        )
 
                             # --- REGULAR MCP TOOLS ---
                             else:
@@ -550,7 +813,7 @@ class MCPClient:
                                     result = f"Error: {e}"
                                     console.print(f"[red]Tool Error: {e}[/]")
 
-                            # Truncate long outputs for display
+                            # Truncate long outputs for Console display (LLM gets full)
                             display_result = (
                                 result[:500] + "..." if len(result) > 500 else result
                             )
@@ -576,29 +839,62 @@ class MCPClient:
 
         except asyncio.CancelledError:
             console.log("[bold yellow]Chat loop cancelled. Cleaning up...[/]")
-            # The context manager (with self.exit_stack) exits here automatically
+            raise
+        except Exception as e:
+            console.log(f"[bold red]Chat loop error: {e}[/]")
             raise
 
 
 # --- SERVER & STARTUP ---
 input_queue = asyncio.Queue()
 active_websocket: Optional[WebSocket] = None
-# Helper to track the background task
 chat_task: Optional[asyncio.Task] = None
-# Global reference to the client to access pending approvals
 current_client: Optional[MCPClient] = None
+shutdown_event: Optional[asyncio.Event] = None
+uvicorn_server: Optional[uvicorn.Server] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global shutdown_event
+    shutdown_event = asyncio.Event()
     yield
-    global chat_task
+    # Cleanup on shutdown
+    await graceful_shutdown()
+
+
+async def graceful_shutdown():
+    """Perform graceful shutdown of all resources."""
+    global current_client, chat_task, terminal
+
+    console.print("[yellow]Initiating shutdown...[/]")
+
+    # Signal shutdown to all components
+    if shutdown_event:
+        shutdown_event.set()
+
+    # Stop terminal
+    await terminal.stop()
+
+    # Cancel chat task
     if chat_task and not chat_task.done():
         chat_task.cancel()
         try:
-            await chat_task
-        except asyncio.CancelledError:
+            await asyncio.wait_for(chat_task, timeout=3.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
+
+    # Shutdown client
+    if current_client:
+        await current_client.shutdown()
+
+    # Clear queues
+    while not input_queue.empty():
+        try:
+            input_queue.get_nowait()
+        except:
+            break
+
     console.print("[green]Shutdown complete.[/]")
 
 
@@ -622,6 +918,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
+            if shutdown_event and shutdown_event.is_set():
+                break
+
             raw = await websocket.receive_text()
             data = json.loads(raw)
 
@@ -637,15 +936,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif provider == "LM Studio":
                     base_url = "http://localhost:1234/v1"
 
-                # Start new task logic
                 if chat_task and not chat_task.done():
                     chat_task.cancel()
                     try:
-                        await chat_task
-                    except asyncio.CancelledError:
+                        await asyncio.wait_for(chat_task, timeout=3.0)
+                    except (asyncio.CancelledError, asyncio.TimeoutError):
                         pass
-
-                # Clear queue if any pending messages
                 while not input_queue.empty():
                     input_queue.get_nowait()
 
@@ -653,13 +949,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     LLMConfig(provider, base_url, api_key, model)
                 )
                 chat_task = asyncio.create_task(current_client.run_chat_loop_web())
-
                 await websocket.send_json({"type": "config_success"})
 
             elif data.get("type") == "message":
                 await input_queue.put(data.get("content"))
 
-            # --- HANDLE APPROVAL RESPONSE ---
+            # --- TERMINAL INPUT HANDLING ---
+            elif data.get("type") == "terminal_input":
+                # Route input to current active PTY (Shell or Agent Command)
+                terminal.write_input(data.get("data"))
+
+            elif data.get("type") == "terminal_resize":
+                # Handle window resize
+                cols = data.get("cols")
+                rows = data.get("rows")
+                if cols and rows:
+                    terminal.resize(rows, cols)
+
             elif data.get("type") == "approval_response":
                 req_id = data.get("requestId")
                 approved = data.get("approved")
@@ -668,90 +974,103 @@ async def websocket_endpoint(websocket: WebSocket):
                     if not future.done():
                         future.set_result(approved)
 
-            # --- 4. HANDLE DIRECTORY UPDATE (NEW) ---
             elif data.get("type") == "update_directory":
                 new_path = data.get("path")
-                # Normalize path to forward slashes for consistency
                 clean_path = new_path.replace("\\", "/")
-
                 console.log(f"[yellow]Updating BASE_DIR to: {clean_path}[/]")
-
                 try:
-                    # A. Overwrite the file on disk
                     with open("mcp_server.py", "r") as f:
                         content = f.read()
-
-                    # Regex to find: BASE_DIR = Path("...") or BASE_DIR = Path(r"...")
-                    # matches single or double quotes, raw string or normal
                     new_content = re.sub(
                         r"BASE_DIR = Path\((?:r?[\"\']).*?(?:[\"\'])\)",
                         f'BASE_DIR = Path(r"{clean_path}")',
                         content,
                     )
-
                     with open("mcp_server.py", "w") as f:
                         f.write(new_content)
-
-                    # B. AUTO-RESTART THE AGENT
                     if current_client:
                         await websocket.send_json(
                             {"type": "status", "text": "Restarting Agent..."}
                         )
-
-                        # 1. Kill existing task
                         if chat_task and not chat_task.done():
                             chat_task.cancel()
                             try:
-                                await chat_task
-                            except asyncio.CancelledError:
+                                await asyncio.wait_for(chat_task, timeout=3.0)
+                            except (asyncio.CancelledError, asyncio.TimeoutError):
                                 pass
-
-                        # 2. Clear queue
                         while not input_queue.empty():
                             input_queue.get_nowait()
-
-                        # 3. Respawn with SAME config
-                        # The new subprocess will read the NEW file from disk
                         console.log("[green]Respawning Client...[/]")
-                        # Re-initialize using the existing config object
                         current_client = MCPClient(current_client.config)
                         chat_task = asyncio.create_task(
                             current_client.run_chat_loop_web()
                         )
-
                         await websocket.send_json(
                             {"type": "status", "text": "Directory Updated & Restarted"}
                         )
-                    else:
-                        await websocket.send_json(
-                            {
-                                "type": "status",
-                                "text": "Directory Updated (Agent was offline)",
-                            }
-                        )
-
                 except Exception as e:
                     console.print(f"[red]Failed to update directory:[/]{e}")
                     await websocket.send_json({"type": "status", "text": f"Error: {e}"})
 
     except WebSocketDisconnect:
         active_websocket = None
-        current_client = None
+    except Exception as e:
+        console.print(f"[red]WebSocket error: {e}[/]")
+        active_websocket = None
 
 
-# --- CLEAN SIGNAL HANDLING ---
-def handle_sigint(signum, frame):
-    # This just ensures we exit the process, triggering the shutdown event
-    sys.exit(0)
+def signal_handler(signum, frame):
+    """Handle termination signals gracefully."""
+    console.print(f"\n[yellow]Received signal {signum}, shutting down...[/]")
+
+    # Set the shutdown event if available
+    if shutdown_event:
+        shutdown_event.set()
+
+    # Stop the uvicorn server if available
+    if uvicorn_server:
+        uvicorn_server.should_exit = True
+
+
+async def run_server():
+    """Run the server with proper async signal handling."""
+    global uvicorn_server
+
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="critical",
+        loop="asyncio",
+    )
+    uvicorn_server = uvicorn.Server(config)
+
+    # Setup signal handlers for async context
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda s=sig: signal_handler(s, None))
+
+    try:
+        await uvicorn_server.serve()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await graceful_shutdown()
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, handle_sigint)
-    signal.signal(signal.SIGTERM, handle_sigint)
-
     console.rule("[bold cyan]ArcBot[/]")
     console.print("1. Open [bold blue]http://localhost:8000[/] in your browser.")
     console.print("2. Configure your LLM in the Web UI.")
     console.print("3. Press [bold red]Ctrl+C[/] here to quit.")
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="critical")
+    try:
+        # Use asyncio.run for proper async signal handling
+        asyncio.run(run_server())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Keyboard interrupt received.[/]")
+    except SystemExit:
+        pass
+    finally:
+        console.print("[green]Goodbye![/]")

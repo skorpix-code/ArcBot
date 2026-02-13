@@ -18,3 +18,5 @@ mcp_client_new.py
 mcp_client_voice.py
 mcp_client.py
 index_voice.html
+mcp_client_webui copy.py
+mcp_server copy.py
