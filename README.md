@@ -1,181 +1,189 @@
-# ArcBot - Local MCP System Agent
+# ArcBot MCP Client WebUI
 
-ArcBot is a powerful, locally-hosted AI System Agent built on the Model Context Protocol (MCP). It acts as a bridge between Large Language Models (LLMs) and your local operating system, allowing AI to perform real-world tasks like file editing, command execution, and web searching, all while keeping a "Human-in-the-Loop" for security.
+ArcBot is a FastAPI + WebSocket web interface for running an MCP-enabled AI agent with live streaming responses, tool execution visibility, command approvals, and interactive terminal output.
 
-It features a modern, reactive web interface (FastAPI + AlpineJS) and supports multiple LLM providers including Ollama, LM Studio, OpenAI, and Google Gemini.
+It is designed so you can connect multiple MCP servers, choose your preferred LLM provider, and run coding/system tasks from one UI.
 
-### ✨ Features
+## Features
 
-    Universal LLM Support: Connect to local models (Ollama, LM Studio) or cloud providers (OpenAI, Gemini).
+- Multi-provider LLM support: `OpenAI`, `Claude`, `Google Gemini`, `Ollama`, `LM Studio`, and `NVIDIA NIM`
+- MCP tool integration via `servers_config.json` (local and remote-compatible server processes)
+- Real-time streaming responses with a collapsible reasoning/thought process section
+- Built-in command approval flow before terminal execution
+- Live terminal panel with streamed command output and interactive input support
+- Persistent configuration through `.env` (provider, model, keys, workspace path)
 
-    File System Control: Create, read, edit, delete, and move files and directories.
+## Tech Stack
 
-    Directory Visualization: View recursive tree structures of your project.
+- Python `3.10+`
+- FastAPI + Uvicorn
+- WebSocket UI
+- MCP Python SDK
 
-    Web Search: Integrated DuckDuckGo search for retrieving live information.
+## Project Structure
 
-    System Command Execution: Run shell commands (e.g., git, python, npm) with Strict User Approval.
+- `mcp_client_webui.py` - Main web app (FastAPI server + WebSocket runtime)
+- `mcp_server.py` - Local MCP server used by default config
+- `servers_config.json` - MCP servers loaded at startup
+- `templates/index.html` - Frontend UI
+- `.env` - Local environment configuration
 
-    Window Management: List, focus, and close windows (Supports Windows, macOS, and Linux/Hyprland/Sway/X11).
+## Prerequisites
 
-    Chain of Thought UI: Visualizes the model's reasoning process (supports <think> tags).
+Install what you need based on your setup:
 
-    Secure Sandbox: All file operations are restricted to a specific directory by default.
+- Python `3.10` or newer
+- One of:
+  - `uv` (recommended), or
+  - standard Python tooling (`venv` + `pip`)
+- Optional, depending on your MCP server config:
+  - `Node.js` (for `npx`-based MCP servers)
+  - `uvx` (for running MCP servers distributed as Python tools)
+- API key for any cloud provider you plan to use
 
-### 🛠️ Prerequisites
+## Installation
 
-    Python 3.10 or higher.
+Choose **one** installation path.
 
-    uv (Optional, but recommended for speed).
+### Option A: Install and run with `uv` (recommended)
 
-    A browser
+1. Clone the repository:
 
-    LM Studio or Ollama (if using local models)
+   ```bash
+   git clone <your-repo-url>
+   cd MCP_CodeAI
+   ```
 
-## 📦 Installation
+2. Install dependencies:
 
-Clone the repository:
-    Bash
+   ```bash
+   uv sync
+   ```
 
-    git clone https://github.com/skorpix-code/ArcBot.git
-    cd ArcBot
+3. Create your `.env` file:
 
-Install Dependencies:
+   ```bash
+   cp .env.example .env
+   ```
 
-You can set up the project using either uv (recommended) or standard pip.
-#### Option A: Using uv (Fast & Recommended)
+   If `.env.example` does not exist yet in your local copy, create `.env` manually using the template in the next section.
 
-If you have uv installed, setup is instant.
+4. Start the app:
 
-Create a virtual environment:
-    
-Bash
+   ```bash
+   uv run python mcp_client_webui.py
+   ```
 
-        uv venv
+### Option B: Install and run with standard Python (`venv` + `pip`)
 
-Install requirements:
-    
-Bash
+1. Clone the repository:
 
-        uv pip install -r requirements.txt
+   ```bash
+   git clone <your-repo-url>
+   cd MCP_CodeAI
+   ```
 
-#### Option B: Using Standard pip
+2. Create and activate a virtual environment:
 
-Create a virtual environment:
-        
-Bash
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
 
-        python -m venv venv
-        # Windows:
-        .\venv\Scripts\activate
-        # Mac/Linux:
-        source venv/bin/activate
+3. Install dependencies:
 
-Install requirements:
-        
-Bash
+   ```bash
+   pip install --upgrade pip
+   pip install -e .
+   ```
 
-        pip install -r requirements.txt
+4. Create your `.env` file:
 
-Dependencies List (requirements.txt)
+   ```bash
+   cp .env.example .env
+   ```
 
-Save this into a file named requirements.txt in the root folder:
-Plaintext
+   If `.env.example` does not exist yet in your local copy, create `.env` manually using the template in the next section.
 
-fastapi
-uvicorn
-python-dotenv
-mcp
-openai
-google-genai
-rich
-duckduckgo-search
-jinja2
-websockets
+5. Start the app:
 
-⚙️ Configuration
-1. Environment Variables (.env)
+   ```bash
+   python mcp_client_webui.py
+   ```
 
-While many configurations can be set in the Web UI, the application looks for a .env file for environment context.
+## Environment Configuration (`.env`)
 
-    Create a file named .env in the root directory.
+Create a `.env` file in the project root. You can copy and paste this template:
 
-    Add the following configurations (optional, depending on your provider):
+```env
+# --- Core app settings ---
+ARCBOT_PROVIDER=OpenAI
+ARCBOT_MODEL=gpt-4o-mini
+ARCBOT_BASE_DIR=~/ArcBot_Workspace
 
-Ini, TOML
+# --- Provider API keys (fill only what you use) ---
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GEMINI_API_KEY=
+NVIDIA_NIM_API_KEY=
 
-# .env file
+# --- Optional provider endpoints ---
+# OpenAI-compatible local servers
+LM_STUDIO_URL=http://localhost:1234/v1
+OLLAMA_URL=http://localhost:11434/v1
 
-# If using Google Gemini
-GOOGLE_API_KEY=your_google_api_key_here
+# --- Optional MCP transport variables (if used by your local server setup) ---
+MCP_TRANSPORT=stdio
+MCP_SERVER_COMMAND=python
+MCP_SERVER_SCRIPT=./mcp_server.py
+MCP_SSE_URL=http://localhost:8000/sse
+```
 
-# If using OpenAI
-OPENAI_API_KEY=your_openai_api_key_here
+Notes:
 
-    Note: You can also enter your API keys directly into the Web UI when you launch the application.
+- Keep secrets out of version control.
+- Use only the API keys for providers you actually use.
+- If you use local `Ollama` or `LM Studio`, make sure the local model server is running.
 
-2. Directory Access
+## Configure MCP Servers
 
-By default, mcp_server.py may have a hardcoded path. You should configure the "Sandbox" directory where the agent is allowed to work.
+MCP servers are loaded from `servers_config.json`.
 
-    Open mcp_server.py.
+Default configuration includes:
 
-    Look for BASE_DIR.
+- a local Python server (`mcp_server.py`)
+- optional utility servers started with `uvx` and `npx`
 
-    You can change it manually now, or use the Web UI later to change it (the agent can rewrite its own config file).
+If you do not have `uvx` or `npx`, remove or comment those entries from `servers_config.json`, or install the required tooling.
 
-🚀 Usage
-1. Start the Server
+## Run the Application
 
-Run the client script, which spins up the web server and manages the MCP connection.
+After setup, open:
 
-If using uv:
-Bash
+- [http://localhost:8000](http://localhost:8000)
 
-uv run mcp_client_webui.py
+On first use in the UI:
 
-If using standard python:
-Bash
+1. Select provider
+2. Set model name
+3. Add API key (or keep blank for local providers that do not require one)
+4. Confirm workspace path
 
-# Ensure your venv is activated first
-python mcp_client_webui.py
+The app will initialize MCP servers, discover tools, and become ready for chat.
 
-2. Access the Interface
+## Provider Notes
 
-Open your web browser and navigate to:
+- `OpenAI`: uses `OPENAI_API_KEY`
+- `Claude`: uses `ANTHROPIC_API_KEY`
+- `Google Gemini`: uses `GEMINI_API_KEY`
+- `NVIDIA NIM`: uses `NVIDIA_NIM_API_KEY` and defaults to `https://integrate.api.nvidia.com/v1`
+- `Ollama` / `LM Studio`: OpenAI-compatible local endpoints (normally no cloud API key required)
 
-http://localhost:8000
+## Troubleshooting
 
-3. Connect an LLM
+- **`ModuleNotFoundError`**: ensure dependencies are installed in the active environment.
+- **Provider auth errors**: check the correct API key variable is set in `.env`.
+- **No tools discovered**: verify `servers_config.json` commands exist on your machine.
+- **Port already in use**: free port `8000` or update app launch configuration.
+- **Local model not responding**: verify Ollama/LM Studio server is running and URL is correct.
 
-    Provider: Select your provider (e.g., Ollama, Google Gemini).
-
-    API Key: Enter key (if not using local models).
-
-    Model: Enter the model name (e.g., deepseek-r1, gemini-2.0-flash-exp).
-
-    Click Initialize System.
-
-4. Start Chatting
-
-    Ask the agent to "Create a Python script that calculates fibonacci" or "Search the web for the latest news on AI".
-
-    Security Check: If the agent tries to run a terminal command (like pip install), a red modal will appear asking for your permission.
-
-🛡️ Security Architecture
-
-ArcBot is designed with a "Human-in-the-Loop" security model.
-
-    File Sandboxing: The agent operates within a restricted BASE_DIR. It cannot access system files outside this path (path traversal attacks are blocked).
-
-    Command Approval: The execute_command tool is the most powerful tool. Every single attempt to execute a shell command requires manual approval in the Web UI.
-
-    Local Execution: The code runs entirely on your machine.
-
-📁 Project Structure
-
-    mcp_client_webui.py: The FastAPI web server and the MCP Client that talks to the LLM.
-
-    mcp_server.py: The MCP Server that provides the "Tools" (File editing, command execution, etc.).
-
-    templates/index.html: The frontend UI.

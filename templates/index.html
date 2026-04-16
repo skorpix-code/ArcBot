@@ -1,1152 +1,2736 @@
 <!doctype html>
-<html lang="en" class="dark">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>ArcBot</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script>
-            tailwind.config = {
-                darkMode: "class",
-                theme: {
-                    extend: {
-                        colors: {
-                            // Define 'primary' to use CSS variables accessible via AlpineJS
-                            primary: {
-                                DEFAULT:
-                                    "rgb(var(--primary-rgb) / <alpha-value>)",
-                                hover: "rgb(var(--primary-hover-rgb) / <alpha-value>)",
-                            },
-                        },
-                    },
-                },
-            };
-        </script>
-        <script
-            defer
-            src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
-        ></script>
-        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-        <link
-            rel="stylesheet"
-            href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
-        />
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-        <link
-            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;600&display=swap"
-            rel="stylesheet"
-        />
-        <style>
-            /* Default Theme Variables (Indigo-ish) */
-            :root {
-                --primary-rgb: 99 102 241; /* #6366f1 */
-                --primary-hover-rgb: 79 70 229; /* #4f46e5 */
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ArcBot Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm-addon-fit/0.8.0/xterm-addon-fit.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+    <style>
+        :root {
+            --bg-base: #0a0a0f;
+            --bg-surface: #111118;
+            --bg-elevated: #1a1a24;
+            --bg-hover: #22222e;
+            --bg-input: #14141c;
+            --border: #2a2a3a;
+            --border-focus: #5b5bf0;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a0;
+            --text-muted: #555566;
+            --accent: #6c6cf0;
+            --accent-glow: rgba(108, 108, 240, 0.15);
+            --accent-hover: #7d7df5;
+            --green: #3dd68c;
+            --green-glow: rgba(61, 214, 140, 0.12);
+            --red: #f05555;
+            --red-glow: rgba(240, 85, 85, 0.12);
+            --orange: #f0a030;
+            --orange-glow: rgba(240, 160, 48, 0.12);
+            --cyan: #40d0e0;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --radius-xl: 20px;
+            --font-body: "Outfit", sans-serif;
+            --font-mono: "JetBrains Mono", monospace;
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px var(--accent-glow);
+            --transition: 180ms ease;
+            --term-bg: #0a0a0f;
+        }
+
+        /* THEMES */
+        body.theme-light {
+            --bg-base: #f5f5f8;
+            --bg-surface: #fff;
+            --bg-elevated: #eeeef2;
+            --bg-hover: #e0e0e6;
+            --bg-input: #f0f0f4;
+            --border: #d0d0da;
+            --text-primary: #1a1a2e;
+            --text-secondary: #555570;
+            --text-muted: #888898;
+            --accent: #5555e0;
+            --accent-glow: rgba(85, 85, 224, 0.1);
+            --accent-hover: #6666f0;
+            --term-bg: #1a1a2e;
+        }
+
+        body.theme-midnight {
+            --bg-base: #0d1520;
+            --bg-surface: #121d2e;
+            --bg-elevated: #1a2840;
+            --bg-hover: #223450;
+            --bg-input: #0f1825;
+            --border: #1e3050;
+            --text-primary: #d0e0f0;
+            --text-secondary: #7090b0;
+            --text-muted: #405878;
+            --accent: #4488ff;
+            --accent-glow: rgba(68, 136, 255, 0.12);
+            --accent-hover: #5599ff;
+            --green: #40d080;
+            --red: #ff5566;
+            --orange: #ffaa44;
+            --cyan: #44ccdd;
+            --term-bg: #0d1520;
+        }
+
+        body.theme-forest {
+            --bg-base: #0a100e;
+            --bg-surface: #101a16;
+            --bg-elevated: #182820;
+            --bg-hover: #20352a;
+            --bg-input: #0c140f;
+            --border: #1e3a2a;
+            --text-primary: #d0e8d8;
+            --text-secondary: #709880;
+            --text-muted: #406050;
+            --accent: #44bb77;
+            --accent-glow: rgba(68, 187, 119, 0.12);
+            --accent-hover: #55cc88;
+            --green: #50dd90;
+            --red: #ee5555;
+            --orange: #ddaa44;
+            --cyan: #44bbcc;
+            --term-bg: #0a100e;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-base);
+            background-image:
+                radial-gradient(circle at 10% 0%,
+                    rgba(108, 108, 240, 0.1),
+                    transparent 45%),
+                radial-gradient(circle at 90% 10%,
+                    rgba(64, 208, 224, 0.08),
+                    transparent 40%);
+            color: var(--text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            opacity: 0;
+            animation: fadeIn 0.5s ease 0.1s forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            height: 56px;
+            min-height: 56px;
+            background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+            border-bottom: 1px solid var(--border);
+            z-index: 10;
+            backdrop-filter: blur(6px);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .status-badge {
+            padding: 2px 9px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            transition: var(--transition);
+        }
+
+        .status-badge.ready {
+            background: var(--green-glow);
+            color: var(--green);
+            border: 1px solid rgba(61, 214, 140, 0.2);
+        }
+
+        .status-badge.working {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(108, 108, 240, 0.2);
+            animation: pulse 2s infinite;
+        }
+
+        .status-badge.error {
+            background: var(--red-glow);
+            color: var(--red);
+            border: 1px solid rgba(240, 85, 85, 0.2);
+        }
+
+        .status-badge.waiting {
+            background: var(--orange-glow);
+            color: var(--orange);
+            border: 1px solid rgba(240, 160, 48, 0.2);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
             }
 
-            body {
-                background-color: #09090b;
-                color: #e4e4e7;
+            50% {
+                opacity: 0.6;
             }
-            .glass {
-                background: rgba(24, 24, 27, 0.7);
-                backdrop-filter: blur(10px);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-            }
-            .prose pre {
-                background: #18181b;
-                padding: 10px;
-                border-radius: 6px;
-                overflow-x: auto;
-            }
-            .prose code {
-                color: #a1a1aa;
-                font-family: "JetBrains Mono";
-                font-size: 0.9em;
-            }
-            .thinking-box {
-                background: rgba(var(--primary-rgb), 0.05);
-                border-left: 2px solid rgb(var(--primary-rgb));
-            }
-            /* Transitions */
-            .fade-enter-active,
-            .fade-leave-active {
-                transition: opacity 0.3s ease;
-            }
-            .fade-enter-from,
-            .fade-leave-to {
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .header-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--text-muted);
+        }
+
+        .header-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        /* Settings dropdown */
+        .settings-dropdown {
+            position: absolute;
+            top: 40px;
+            right: 0;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            width: 220px;
+            box-shadow: var(--shadow-lg);
+            z-index: 100;
+            overflow: hidden;
+            display: none;
+            animation: modalIn 0.2s ease;
+        }
+
+        .settings-dropdown.open {
+            display: block;
+        }
+
+        .sd-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sd-item:last-child {
+            border-bottom: none;
+        }
+
+        .sd-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .sd-icon {
+            font-size: 15px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .sd-sub {
+            padding: 6px 14px;
+        }
+
+        .sd-sub-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .theme-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .theme-chip {
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-base);
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+
+        .theme-chip:hover,
+        .theme-chip.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        /* MAIN */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            animation: msgIn 0.3s ease;
+        }
+
+        @keyframes msgIn {
+            from {
                 opacity: 0;
+                transform: translateY(8px);
             }
 
-            /* Thanos Snap Effect */
-            .disintegrate {
-                animation: snap 1s ease-out forwards;
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .msg-avatar {
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .message.assistant .msg-avatar {
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            color: #fff;
+        }
+
+        .message.user .msg-avatar {
+            display: none;
+        }
+
+        .msg-body {
+            min-width: 0;
+            max-width: min(80vw, 800px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .msg-content {
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 13.5px;
+            line-height: 1.6;
+            overflow-wrap: break-word;
+            word-break: break-word;
+        }
+
+        .message.assistant .msg-content {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .message.user .msg-content {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            display: inline-block;
+        }
+
+        .message.user .msg-body {
+            text-align: right;
+            max-width: min(75vw, 650px);
+        }
+
+        /* Markdown */
+        .msg-content h1,
+        .msg-content h2,
+        .msg-content h3 {
+            margin: 12px 0 6px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .msg-content h1 {
+            font-size: 1.2em;
+        }
+
+        .msg-content h2 {
+            font-size: 1.1em;
+        }
+
+        .msg-content h3 {
+            font-size: 1em;
+        }
+
+        .msg-content p {
+            margin: 5px 0;
+        }
+
+        .msg-content ul,
+        .msg-content ol {
+            padding-left: 18px;
+            margin: 5px 0;
+        }
+
+        .msg-content li {
+            margin: 2px 0;
+        }
+
+        .msg-content a {
+            color: var(--cyan);
+            text-decoration: none;
+        }
+
+        .msg-content blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 10px;
+            color: var(--text-secondary);
+            margin: 6px 0;
+        }
+
+        .msg-content table {
+            border-collapse: collapse;
+            margin: 6px 0;
+            width: 100%;
+        }
+
+        .msg-content th,
+        .msg-content td {
+            border: 1px solid var(--border);
+            padding: 5px 8px;
+            text-align: left;
+            font-size: 12px;
+        }
+
+        .msg-content th {
+            background: var(--bg-elevated);
+            font-weight: 600;
+        }
+
+        .msg-content code {
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        .msg-content :not(pre)>code {
+            background: var(--bg-elevated);
+            padding: 1px 5px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+        }
+
+        .msg-content pre {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin: 8px 0;
+            overflow-x: auto;
+        }
+
+        .msg-content pre code {
+            background: none;
+            padding: 0;
+            border: none;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 12px;
+            background: #161b22;
+            border: 1px solid var(--border);
+            border-bottom: none;
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .code-header+pre {
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+            margin-top: 0;
+        }
+
+        .copy-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: var(--font-mono);
+            transition: var(--transition);
+        }
+
+        .copy-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        /* THINKING INDICATOR - now shows text */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 2px 0;
+            font-size: 12px;
+            color: var(--accent);
+        }
+
+        .thinking-indicator .think-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: bounce 1.4s ease-in-out infinite;
+        }
+
+        .thinking-indicator .think-dot:nth-child(2) {
+            animation-delay: 0.16s;
+        }
+
+        .thinking-indicator .think-dot:nth-child(3) {
+            animation-delay: 0.32s;
+        }
+
+        .thinking-indicator .think-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .reasoning-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 2px 2px 0;
+            margin-bottom: 8px;
+        }
+
+        .reasoning-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+            border: none;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font: inherit;
+            transition: color var(--transition);
+        }
+
+        .reasoning-toggle:hover {
+            color: var(--text-primary);
+        }
+
+        .reasoning-wrap.open .reasoning-toggle {
+            color: var(--accent);
+        }
+
+        .reasoning-caret {
+            font-size: 10px;
+            line-height: 1;
+            transition: transform var(--transition);
+        }
+
+        .reasoning-wrap.open .reasoning-caret {
+            transform: rotate(90deg);
+        }
+
+        .reasoning-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .reasoning-content {
+            display: none;
+            white-space: pre-wrap;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            line-height: 1.55;
+            color: var(--text-secondary);
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 0 4px 0 16px;
+        }
+
+        .reasoning-wrap.open .reasoning-content {
+            display: block;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0.6);
+                opacity: 0.4;
             }
 
-            @keyframes snap {
-                0% {
-                    opacity: 1;
-                    filter: blur(0);
-                    transform: scale(1);
-                }
-                100% {
-                    opacity: 0;
-                    filter: blur(8px) grayscale(100%);
-                    transform: scale(1.05) translateX(10px) translateY(-10px);
-                }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* INPUT */
+        .input-bar {
+            padding: 10px 20px 14px;
+            background: var(--bg-surface);
+            border-top: 1px solid var(--border);
+        }
+
+        .input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            gap: 6px;
+            align-items: flex-end;
+        }
+
+        #chatInput {
+            flex: 1;
+            min-height: 42px;
+            max-height: 150px;
+            padding: 9px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 13.5px;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+            transition: border-color var(--transition);
+        }
+
+        #chatInput:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        #chatInput::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .send-btn {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .send-btn:hover {
+            background: var(--accent-hover);
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stop-btn {
+            background: var(--red);
+            color: #fff;
+            display: none;
+        }
+
+        .stop-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .stop-btn.visible {
+            display: flex;
+        }
+
+        .mic-btn {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .mic-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .mic-btn.listening {
+            background: var(--red);
+            color: #fff;
+            border-color: var(--red);
+            animation: pulse 1s infinite;
+        }
+
+        .mic-btn.wake-listening {
+            color: var(--cyan);
+            border-color: rgba(64, 208, 224, 0.3);
+        }
+
+        /* SIDE PANEL */
+        .side-panel {
+            width: 380px;
+            min-width: 380px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--border);
+            background: var(--bg-surface);
+            transition: width 0.3s ease;
+        }
+
+        .side-panel.collapsed {
+            width: 0;
+            min-width: 0;
+            overflow: hidden;
+            border-left: none;
+        }
+
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-elevated);
+        }
+
+        .panel-tab {
+            flex: 1;
+            padding: 9px 0;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .panel-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .panel-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .panel-tab .tab-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            border-radius: 100px;
+            background: var(--accent-glow);
+            color: var(--accent);
+            font-size: 9px;
+            margin-left: 4px;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-section {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+        }
+
+        .panel-section.active {
+            display: flex;
+        }
+
+        .tool-activity {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .tool-item {
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            animation: slideIn 0.25s ease;
+            font-size: 12px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(8px);
             }
 
-            /* Custom Color Picker Styling */
-            input[type="color"] {
-                -webkit-appearance: none;
-                border: none;
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .tool-item-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 3px;
+        }
+
+        .tool-icon {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            flex-shrink: 0;
+        }
+
+        .tool-icon.running {
+            background: var(--accent-glow);
+            color: var(--accent);
+        }
+
+        .tool-icon.success {
+            background: var(--green-glow);
+            color: var(--green);
+        }
+
+        .tool-icon.error {
+            background: var(--red-glow);
+            color: var(--red);
+        }
+
+        .tool-name {
+            font-weight: 600;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+
+        .tool-args,
+        .tool-result-text {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            margin-top: 3px;
+            max-height: 60px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .tool-result-text {
+            color: var(--green);
+        }
+
+        .tool-result-text.error {
+            color: var(--red);
+        }
+
+        .tools-list-section {
+            padding: 10px;
+        }
+
+        .tools-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+        }
+
+        .tool-badge {
+            padding: 2px 7px;
+            border-radius: 100px;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            font-family: var(--font-mono);
+            font-size: 9px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        /* TODO */
+        .todo-list {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .todo-item {
+            padding: 8px 10px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            animation: slideIn 0.25s ease;
+        }
+
+        .todo-status {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .todo-status.pending {
+            background: var(--bg-elevated);
+            border: 2px solid var(--text-muted);
+        }
+
+        .todo-status.in_progress {
+            background: var(--accent-glow);
+            border: 2px solid var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        .todo-status.completed {
+            background: var(--green-glow);
+            border: 2px solid var(--green);
+        }
+
+        .todo-status.blocked {
+            background: var(--red-glow);
+            border: 2px solid var(--red);
+        }
+
+        .todo-status.cancelled {
+            background: var(--bg-elevated);
+            border: 2px solid var(--text-muted);
+        }
+
+        .todo-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .todo-title {
+            font-weight: 600;
+            font-size: 12px;
+            line-height: 1.3;
+        }
+
+        .todo-title.done {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        /* TERMINAL - floating right panel */
+        .terminal-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 0;
+            background: var(--term-bg);
+            border-left: 2px solid var(--accent);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+            overflow: hidden;
+        }
+
+        .terminal-panel.open {
+            width: 55%;
+        }
+
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 14px;
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            min-height: 32px;
+        }
+
+        .terminal-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .terminal-header-left .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        .terminal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .terminal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .terminal-body {
+            flex: 1;
+            padding: 4px;
+            overflow: hidden;
+        }
+
+        .terminal-body .xterm {
+            height: 100%;
+        }
+
+        /* MODALS */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            width: 460px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            animation: modalIn 0.35s ease;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-header {
+            padding: 22px 26px 0;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 3px;
+        }
+
+        .modal-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            padding: 18px 26px;
+        }
+
+        .modal-footer {
+            padding: 14px 26px 22px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 9px 11px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 13px;
+            outline: none;
+            transition: border-color var(--transition);
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .form-select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238888a0'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 11px center;
+        }
+
+        .form-select option {
+            background: var(--bg-surface);
+        }
+
+        .form-hint {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .password-wrapper {
+            position: relative;
+        }
+
+        .password-wrapper .form-input {
+            padding-right: 34px;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 7px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 3px;
+        }
+
+        .btn {
+            padding: 9px 18px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-body);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: var(--transition);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        /* APPROVAL */
+        .approval-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .approval-overlay.hidden {
+            display: none;
+        }
+
+        .approval-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--orange);
+            border-radius: var(--radius-lg);
+            padding: 22px;
+            width: 420px;
+            max-width: 90vw;
+            box-shadow:
+                var(--shadow-lg),
+                0 0 30px var(--orange-glow);
+            animation: modalIn 0.25s ease;
+        }
+
+        .approval-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--orange);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .approval-cmd {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 9px 12px;
+            background: var(--bg-base);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 14px;
+            word-break: break-all;
+            color: var(--cyan);
+        }
+
+        .approval-btns {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .btn-approve {
+            background: var(--green);
+            color: #000;
+            font-weight: 700;
+        }
+
+        .btn-approve:hover {
+            filter: brightness(1.1);
+        }
+
+        .btn-deny {
+            background: var(--red);
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .btn-deny:hover {
+            filter: brightness(1.1);
+        }
+
+        /* WELCOME */
+        .welcome-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .welcome-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--radius-lg);
+            background: linear-gradient(135deg, var(--accent), var(--cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #fff;
+            font-weight: 800;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .welcome-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .welcome-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            max-width: 380px;
+            line-height: 1.6;
+        }
+
+        .welcome-hints {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 6px;
+        }
+
+        .hint-chip {
+            padding: 7px 12px;
+            border-radius: 100px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .hint-chip:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-glow);
+        }
+
+        /* STT */
+        .stt-bar {
+            position: fixed;
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-surface);
+            border: 1px solid var(--cyan);
+            border-radius: var(--radius-lg);
+            padding: 8px 18px;
+            font-size: 12px;
+            color: var(--cyan);
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(64, 208, 224, 0.15);
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stt-bar.active {
+            display: flex;
+        }
+
+        .stt-waves {
+            display: flex;
+            gap: 2px;
+            align-items: center;
+        }
+
+        .stt-waves span {
+            width: 3px;
+            background: var(--cyan);
+            border-radius: 2px;
+            animation: wave 0.8s ease-in-out infinite;
+        }
+
+        .stt-waves span:nth-child(1) {
+            height: 8px;
+        }
+
+        .stt-waves span:nth-child(2) {
+            height: 14px;
+            animation-delay: 0.1s;
+        }
+
+        .stt-waves span:nth-child(3) {
+            height: 10px;
+            animation-delay: 0.2s;
+        }
+
+        .stt-waves span:nth-child(4) {
+            height: 16px;
+            animation-delay: 0.3s;
+        }
+
+        .stt-waves span:nth-child(5) {
+            height: 8px;
+            animation-delay: 0.4s;
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                transform: scaleY(0.5);
+            }
+
+            50% {
+                transform: scaleY(1.2);
+            }
+        }
+
+        .empty-state {
+            padding: 30px 15px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .side-panel {
+                display: none;
+            }
+
+            .terminal-panel.open {
                 width: 100%;
-                height: 100%;
-                border-radius: 50%;
-                overflow: hidden;
-                cursor: pointer;
             }
-            input[type="color"]::-webkit-color-swatch-wrapper {
-                padding: 0;
-            }
-            input[type="color"]::-webkit-color-swatch {
-                border: none;
-            }
-        </style>
-    </head>
-    <body
-        class="h-screen flex flex-col font-sans overflow-hidden selection:bg-primary/30"
-    >
-        <div
-            x-data="app()"
-            x-init="connect()"
-            class="h-full flex flex-col relative"
-        >
-            <div
-                x-show="!configured"
-                x-transition.opacity
-                class="absolute inset-0 z-50 bg-[#09090b] flex items-center justify-center p-4"
-            >
-                <div
-                    class="glass w-full max-w-md p-8 rounded-2xl shadow-2xl border border-zinc-800"
-                >
-                    <div class="mb-8 text-center">
-                        <div
-                            class="w-12 h-12 bg-primary rounded-xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-primary/30 transition-colors duration-300"
-                        >
-                            <svg
-                                class="w-6 h-6 text-white"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                                />
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                            </svg>
-                        </div>
-                        <h2 class="text-xl font-semibold text-white">
-                            Agent Configuration
-                        </h2>
-                        <p class="text-zinc-500 text-sm mt-2">
-                            Connect to your preferred LLM provider
-                        </p>
-                    </div>
+        }
+    </style>
+</head>
 
-                    <div class="space-y-4">
-                        <div>
-                            <label
-                                class="block text-xs font-medium text-zinc-400 mb-1"
-                                >Provider</label
-                            >
-                            <select
-                                x-model="config.provider"
-                                @change="updateModelDefault()"
-                                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-primary focus:outline-none"
-                            >
-                                <option value="LM Studio">LM Studio</option>
-                                <option value="Ollama">Ollama</option>
-                                <option value="Google Gemini">
-                                    Google Gemini
-                                </option>
-                                <option value="OpenAI">OpenAI</option>
-                            </select>
-                        </div>
-
-                        <div
-                            x-show="config.provider !== 'Ollama' && config.provider !== 'LM Studio'"
-                        >
-                            <label
-                                class="block text-xs font-medium text-zinc-400 mb-1"
-                                >API Key</label
-                            >
-                            <input
-                                type="password"
-                                x-model="config.apiKey"
-                                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-primary focus:outline-none"
-                                placeholder="sk-..."
-                            />
-                        </div>
-
-                        <div>
-                            <label
-                                class="block text-xs font-medium text-zinc-400 mb-1"
-                                >Model Name</label
-                            >
-                            <input
-                                type="text"
-                                x-model="config.model"
-                                class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-primary focus:outline-none"
-                            />
-                        </div>
-
-                        <button
-                            @click="submitConfig"
-                            class="w-full bg-primary hover:bg-primary-hover text-white py-2 rounded-lg font-medium transition-colors shadow-lg shadow-primary/20 mt-2"
-                        >
-                            Initialize System
-                        </button>
-                    </div>
-                </div>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="header-left">
+                <div class="logo-icon">A</div>
+                <span class="logo">ArcBot</span>
+                <span id="statusBadge" class="status-badge waiting">Configuring</span>
             </div>
-
-            <div
-                x-show="themeModal.open"
-                x-transition.opacity
-                class="absolute inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                style="display: none"
-                @click.self="themeModal.open = false"
-            >
-                <div
-                    class="glass w-full max-w-md rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col"
-                >
-                    <div
-                        class="p-4 border-b border-white/5 flex items-center justify-between"
-                    >
-                        <h3 class="text-white font-medium">Appearance</h3>
-                        <button
-                            @click="themeModal.open = false"
-                            class="text-zinc-500 hover:text-white transition-colors"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="w-5 h-5"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="flex border-b border-white/5">
-                        <button
-                            @click="themeModal.tab = 'presets'"
-                            class="flex-1 py-3 text-sm font-medium transition-colors relative"
-                            :class="themeModal.tab === 'presets' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'"
-                        >
-                            Presets
-                            <div
-                                x-show="themeModal.tab === 'presets'"
-                                class="absolute bottom-0 left-0 w-full h-0.5 bg-primary"
-                                x-transition
-                            ></div>
-                        </button>
-                        <button
-                            @click="themeModal.tab = 'custom'"
-                            class="flex-1 py-3 text-sm font-medium transition-colors relative"
-                            :class="themeModal.tab === 'custom' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'"
-                        >
-                            Custom
-                            <div
-                                x-show="themeModal.tab === 'custom'"
-                                class="absolute bottom-0 left-0 w-full h-0.5 bg-primary"
-                                x-transition
-                            ></div>
-                        </button>
-                    </div>
-
-                    <div class="p-6">
-                        <div
-                            x-show="themeModal.tab === 'presets'"
-                            x-transition:enter="transition ease-out duration-200"
-                            x-transition:enter-start="opacity-0 translate-y-2"
-                            x-transition:enter-end="opacity-100 translate-y-0"
-                        >
-                            <div class="grid grid-cols-4 gap-4">
-                                <template
-                                    x-for="preset in themeModal.presets"
-                                    :key="preset.hex"
-                                >
-                                    <button
-                                        @click="applyTheme(preset.hex)"
-                                        class="flex flex-col items-center gap-2 group"
-                                    >
-                                        <div
-                                            class="w-12 h-12 rounded-full shadow-lg transition-transform group-hover:scale-110 border-2"
-                                            :class="themeModal.currentHex === preset.hex ? 'border-white' : 'border-transparent'"
-                                            :style="`background-color: ${preset.hex}`"
-                                        ></div>
-                                        <span
-                                            class="text-xs text-zinc-400 group-hover:text-white transition-colors"
-                                            x-text="preset.name"
-                                        ></span>
-                                    </button>
-                                </template>
-                            </div>
+            <div class="header-right">
+                <button class="header-btn" onclick="togglePanel()" title="Activity panel">
+                    &#9776;
+                </button>
+                <button class="header-btn" id="termBtn" onclick="toggleTerminal()" title="Terminal">
+                    &#9002;
+                </button>
+                <div style="position: relative">
+                    <button class="header-btn" id="settingsBtn" onclick="toggleSettingsMenu()" title="Settings">
+                        &#9881;
+                    </button>
+                    <div id="settingsDropdown" class="settings-dropdown">
+                        <div class="sd-item" onclick="
+                                    showConfigModal();
+                                    closeSettingsMenu();
+                                ">
+                            <span class="sd-icon">&#9881;</span> LLM
+                            Provider
                         </div>
-
-                        <div
-                            x-show="themeModal.tab === 'custom'"
-                            x-transition:enter="transition ease-out duration-200"
-                            x-transition:enter-start="opacity-0 translate-y-2"
-                            x-transition:enter-end="opacity-100 translate-y-0"
-                            class="space-y-6"
-                        >
-                            <div class="flex items-center gap-6">
-                                <div
-                                    class="relative w-24 h-24 rounded-full shadow-xl ring-2 ring-white/10 overflow-hidden shrink-0"
-                                >
-                                    <input
-                                        type="color"
-                                        x-model="themeModal.tempHex"
-                                        @input="updateCustomFromPicker($event.target.value)"
-                                        class="absolute inset-0 w-[150%] h-[150%] -top-1/4 -left-1/4 p-0 m-0 cursor-pointer"
-                                    />
-                                </div>
-                                <div class="flex-1 space-y-1">
-                                    <div
-                                        class="text-xs text-zinc-500 uppercase tracking-wider font-bold"
-                                    >
-                                        Selected Color
-                                    </div>
-                                    <div
-                                        class="text-2xl font-mono text-white"
-                                        x-text="themeModal.tempHex"
-                                    ></div>
-                                </div>
-                            </div>
-
-                            <hr class="border-zinc-800" />
-
-                            <div class="space-y-4">
-                                <div>
-                                    <label
-                                        class="block text-xs font-medium text-zinc-400 mb-1.5"
-                                        >HEX Code</label
-                                    >
-                                    <div
-                                        class="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2"
-                                    >
-                                        <span class="text-zinc-500">#</span>
-                                        <input
-                                            type="text"
-                                            x-model="themeModal.inputHex"
-                                            @input="updateCustomFromHex($event.target.value)"
-                                            class="w-full bg-transparent border-none text-sm text-white focus:outline-none font-mono uppercase"
-                                            maxlength="6"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div class="grid grid-cols-3 gap-3">
-                                    <div>
-                                        <label
-                                            class="block text-xs font-medium text-zinc-400 mb-1.5"
-                                            >R</label
-                                        >
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="255"
-                                            x-model="themeModal.rgb.r"
-                                            @input="updateCustomFromRGB()"
-                                            class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary focus:outline-none text-center"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label
-                                            class="block text-xs font-medium text-zinc-400 mb-1.5"
-                                            >G</label
-                                        >
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="255"
-                                            x-model="themeModal.rgb.g"
-                                            @input="updateCustomFromRGB()"
-                                            class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary focus:outline-none text-center"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label
-                                            class="block text-xs font-medium text-zinc-400 mb-1.5"
-                                            >B</label
-                                        >
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="255"
-                                            x-model="themeModal.rgb.b"
-                                            @input="updateCustomFromRGB()"
-                                            class="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-primary focus:outline-none text-center"
-                                        />
-                                    </div>
-                                </div>
+                        <div class="sd-item" onclick="
+                                    clearChat();
+                                    closeSettingsMenu();
+                                ">
+                            <span class="sd-icon">&#128465;</span> Clear
+                            Chat
+                        </div>
+                        <div class="sd-sub">
+                            <div class="sd-sub-label">Theme</div>
+                            <div class="theme-chips">
+                                <span class="theme-chip active" onclick="setTheme('')">Dark</span>
+                                <span class="theme-chip" onclick="setTheme('theme-light')">Light</span>
+                                <span class="theme-chip" onclick="setTheme('theme-midnight')">Midnight</span>
+                                <span class="theme-chip" onclick="setTheme('theme-forest')">Forest</span>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div
-                x-show="dirModal.open"
-                x-transition.opacity
-                class="absolute inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-                style="display: none"
-                @click.self="dirModal.open = false"
-            >
-                <div
-                    class="glass w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-zinc-800"
-                >
-                    <h3 class="text-lg font-bold text-white mb-2">
-                        Change Directory Access
-                    </h3>
-                    <p class="text-zinc-400 text-sm mb-4">
-                        Enter the absolute path to the directory you want the
-                        Agent to access. This will overwrite the configuration
-                        in <code>mcp_server.py</code> and restart the agent.
-                    </p>
-
-                    <div class="mb-4">
-                        <label
-                            class="block text-xs font-medium text-zinc-500 uppercase mb-1"
-                            >Absolute Path</label
-                        >
-                        <div class="flex gap-2">
-                            <input
-                                type="text"
-                                x-model="dirModal.path"
-                                placeholder="/home/username/projects"
-                                class="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:ring-2 focus:ring-primary focus:outline-none"
-                            />
+        </header>
+        <div class="main-content">
+            <div class="chat-panel">
+                <div id="messages" class="messages-container">
+                    <div id="welcomeScreen" class="welcome-screen">
+                        <div class="welcome-icon">A</div>
+                        <div class="welcome-title">ArcBot Agent</div>
+                        <div class="welcome-subtitle">
+                            Your autonomous AI agent. Configure a provider
+                            to begin.
                         </div>
-                        <p class="text-[10px] text-zinc-600 mt-2">
-                            * Note: Browser security prevents direct folder
-                            picking. Please paste the path.
-                        </p>
+                        <div class="welcome-hints">
+                            <div class="hint-chip" onclick="sendHint(this)">
+                                Organize my windows in a grid
+                            </div>
+                            <div class="hint-chip" onclick="sendHint(this)">
+                                Scaffold a React project
+                            </div>
+                            <div class="hint-chip" onclick="sendHint(this)">
+                                List running processes
+                            </div>
+                            <div class="hint-chip" onclick="sendHint(this)">
+                                Take a screenshot
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="flex justify-end gap-3">
-                        <button
-                            @click="dirModal.open = false"
-                            class="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors"
-                        >
-                            Cancel
+                </div>
+                <div class="input-bar">
+                    <div class="input-wrapper">
+                        <textarea id="chatInput" placeholder="Ask ArcBot anything..." rows="1" disabled></textarea>
+                        <button class="input-btn mic-btn" id="micBtn" onclick="toggleMic()" title="Voice input">
+                            &#127908;
                         </button>
-                        <button
-                            @click="updateDirectory()"
-                            class="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Update & Restart
+                        <button class="input-btn stop-btn" id="stopBtn" onclick="stopGeneration()" title="Stop">
+                            &#9632;
+                        </button>
+                        <button class="input-btn send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+                            &#10148;
                         </button>
                     </div>
                 </div>
             </div>
-
-            <div
-                x-show="approval.pending"
-                x-transition.opacity
-                class="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-                style="display: none"
-            >
-                <div
-                    class="glass w-full max-w-lg p-6 rounded-2xl shadow-2xl border border-red-500/50 relative overflow-hidden"
-                >
-                    <div
-                        class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-orange-500 to-red-500 animate-pulse"
-                    ></div>
-
-                    <div class="flex items-start gap-4 mb-4">
-                        <div
-                            class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 border border-red-500/30"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                class="w-5 h-5 text-red-400"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                                />
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-bold text-white">
-                                Execution Approval Required
-                            </h3>
-                            <p class="text-zinc-400 text-sm mt-1">
-                                The agent wants to execute a command on your
-                                system.
-                            </p>
+            <div id="sidePanel" class="side-panel">
+                <div class="panel-tabs">
+                    <div class="panel-tab active" onclick="switchTab('activity', this)">
+                        Activity
+                        <span id="activityCount" class="tab-count" style="display: none">0</span>
+                    </div>
+                    <div class="panel-tab" onclick="switchTab('tasks', this)">
+                        Tasks
+                        <span id="tasksCount" class="tab-count" style="display: none">0</span>
+                    </div>
+                    <div class="panel-tab" onclick="switchTab('tools', this)">
+                        Tools
+                        <span id="toolsCount" class="tab-count" style="display: none">0</span>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div id="panelActivity" class="panel-section active">
+                        <div id="toolActivity" class="tool-activity">
+                            <div class="empty-state">
+                                Tool activity will appear here
+                            </div>
                         </div>
                     </div>
-
-                    <div
-                        class="bg-black/50 rounded-lg p-4 font-mono text-sm border border-zinc-800 mb-6 overflow-x-auto"
-                    >
-                        <code
-                            class="text-yellow-400"
-                            x-text="approval.command"
-                        ></code>
+                    <div id="panelTasks" class="panel-section">
+                        <div id="todoList" class="todo-list">
+                            <div class="empty-state">
+                                Agent tasks appear here during multi-step
+                                work
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="flex gap-3">
-                        <button
-                            @click="sendApproval(false)"
-                            class="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-2.5 rounded-lg font-medium transition-colors border border-zinc-700"
-                        >
-                            Deny
-                        </button>
-                        <button
-                            @click="sendApproval(true)"
-                            class="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-lg font-medium transition-colors shadow-lg shadow-red-900/20"
-                        >
-                            Allow Execution
-                        </button>
+                    <div id="panelTools" class="panel-section">
+                        <div id="toolsList" class="tools-list-section">
+                            <div class="empty-state">
+                                Waiting for tools...
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <header
-                class="h-14 glass flex items-center justify-between px-6 z-20 shrink-0"
-            >
-                <div class="flex items-center gap-3">
-                    <div
-                        class="w-2.5 h-2.5 rounded-full bg-primary animate-pulse shadow-lg shadow-primary/50"
-                    ></div>
-                    <h1
-                        class="font-semibold text-sm tracking-widest text-zinc-400"
-                    >
-                        ARC <span class="text-primary font-bold">BOT</span>
-                    </h1>
-                </div>
-
-                <div
-                    x-show="globalStatus && globalStatus !== 'Ready'"
-                    x-transition
-                    class="absolute left-1/2 -translate-x-1/2 top-4 bg-primary/10 border border-primary/20 px-4 py-1 rounded-full flex items-center gap-2"
-                >
-                    <div
-                        class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"
-                    ></div>
-                    <span
-                        class="text-[10px] font-mono text-primary uppercase tracking-wider opacity-80"
-                        x-text="globalStatus"
-                    ></span>
-                </div>
-
-                <div class="flex items-center gap-4">
-                    <div
-                        class="text-[10px] font-mono text-zinc-500 uppercase hidden md:block"
-                        x-text="config.model"
-                    ></div>
-
-                    <div class="relative" x-data="{ open: false }">
-                        <button
-                            @click="open = !open"
-                            @click.outside="open = false"
-                            class="p-2 text-zinc-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="18"
-                                height="18"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
-                                <path
-                                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-                                />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                        </button>
-
-                        <div
-                            x-show="open"
-                            x-transition:enter="transition ease-out duration-100"
-                            x-transition:enter-start="transform opacity-0 scale-95"
-                            x-transition:enter-end="transform opacity-100 scale-100"
-                            x-transition:leave="transition ease-in duration-75"
-                            x-transition:leave-start="transform opacity-100 scale-100"
-                            x-transition:leave-end="transform opacity-0 scale-95"
-                            class="absolute right-0 mt-2 w-48 bg-[#18181b] rounded-lg shadow-xl border border-zinc-800 z-50 overflow-hidden"
-                        >
-                            <div class="py-1">
-                                <button
-                                    @click="triggerReset(); open = false"
-                                    class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-white/5 flex items-center gap-2 group"
-                                >
-                                    <svg
-                                        class="w-4 h-4 group-hover:animate-pulse"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <path
-                                            d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                                        />
-                                        <path d="M3 3v5h5" />
-                                    </svg>
-                                    Reset Chat
-                                </button>
-                                <button
-                                    @click="dirModal.open = true; open = false"
-                                    class="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 flex items-center gap-2"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="w-4 h-4"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <path
-                                            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
-                                        />
-                                    </svg>
-                                    Change Directory Access
-                                </button>
-                                <button
-                                    @click="themeModal.open = true; open = false"
-                                    class="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 flex items-center gap-2"
-                                >
-                                    <svg
-                                        class="w-4 h-4"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line
-                                            x1="14.31"
-                                            y1="8"
-                                            x2="20.05"
-                                            y2="17.94"
-                                        ></line>
-                                        <line
-                                            x1="9.69"
-                                            y1="8"
-                                            x2="21.17"
-                                            y2="8"
-                                        ></line>
-                                        <line
-                                            x1="7.38"
-                                            y1="12"
-                                            x2="13.12"
-                                            y2="2.06"
-                                        ></line>
-                                        <line
-                                            x1="9.69"
-                                            y1="16"
-                                            x2="3.95"
-                                            y2="6.06"
-                                        ></line>
-                                        <line
-                                            x1="14.31"
-                                            y1="16"
-                                            x2="2.83"
-                                            y2="16"
-                                        ></line>
-                                        <line
-                                            x1="16.62"
-                                            y1="12"
-                                            x2="10.88"
-                                            y2="21.94"
-                                        ></line>
-                                    </svg>
-                                    Themes
-                                </button>
-                                <button
-                                    @click="switchProvider(); open = false"
-                                    class="w-full text-left px-4 py-2 text-sm text-zinc-300 hover:bg-white/5 flex items-center gap-2"
-                                >
-                                    <svg
-                                        class="w-4 h-4"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <rect
-                                            width="20"
-                                            height="14"
-                                            x="2"
-                                            y="3"
-                                            rx="2"
-                                        />
-                                        <line x1="8" x2="16" y1="21" y2="21" />
-                                        <line x1="12" x2="12" y1="17" y2="21" />
-                                    </svg>
-                                    Switch Provider
-                                </button>
-                            </div>
-                        </div>
+            <div id="terminalPanel" class="terminal-panel">
+                <div class="terminal-header">
+                    <div class="terminal-header-left">
+                        <div class="dot"></div>
+                        Terminal
                     </div>
+                    <button class="terminal-close" onclick="toggleTerminal()">
+                        &#10005;
+                    </button>
                 </div>
-            </header>
-
-            <main
-                class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
-                id="chat-box"
-            >
-                <div
-                    x-show="msgs.length === 0"
-                    class="h-full flex flex-col items-center justify-center text-center p-8 opacity-50 select-none"
-                >
-                    <div
-                        class="w-16 h-16 bg-zinc-800 rounded-2xl flex items-center justify-center mb-6"
-                    >
-                        <svg
-                            class="w-8 h-8 text-zinc-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="1.5"
-                                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                            />
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-medium text-white mb-2">
-                        Welcome to ArcBot
-                    </h3>
-                    <p class="text-zinc-500 max-w-sm mx-auto">
-                        I can help you execute tasks, analyze files, and run
-                        commands. Start by typing a request below.
-                    </p>
-                </div>
-
-                <template x-for="msg in msgs" :key="msg.id">
-                    <div
-                        class="max-w-4xl mx-auto w-full group transition-all"
-                        :class="{'disintegrate': msg.snapped}"
-                    >
-                        <div
-                            x-show="msg.role === 'user'"
-                            class="flex justify-end mb-4"
-                        >
-                            <div
-                                class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-2xl rounded-tr-sm text-sm text-zinc-200 shadow-md"
-                            >
-                                <span x-text="msg.text"></span>
-                            </div>
-                        </div>
-
-                        <div
-                            x-show="msg.role === 'assistant'"
-                            class="flex gap-4 mb-8"
-                        >
-                            <div
-                                class="w-8 h-8 rounded bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 text-primary text-xs font-bold"
-                            >
-                                AI
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div
-                                    x-show="msg.thought"
-                                    x-data="{open:true}"
-                                    class="mb-2"
-                                >
-                                    <button
-                                        @click="open=!open"
-                                        class="text-[10px] font-mono text-primary uppercase tracking-widest flex items-center gap-2 hover:opacity-80 transition-opacity"
-                                    >
-                                        <span
-                                            class="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"
-                                        ></span>
-                                        Reasoning
-                                    </button>
-                                    <div
-                                        x-show="open"
-                                        x-collapse
-                                        class="thinking-box p-3 rounded mt-1 text-xs text-zinc-400 font-mono"
-                                    >
-                                        <div x-html="parse(msg.thought)"></div>
-                                    </div>
-                                </div>
-
-                                <div
-                                    x-show="msg.status && !msg.text"
-                                    class="flex items-center gap-2 text-xs font-mono text-zinc-500 animate-pulse bg-zinc-900/50 w-fit px-2 py-1 rounded"
-                                >
-                                    <div
-                                        class="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"
-                                    ></div>
-                                    <span x-text="msg.status"></span>
-                                </div>
-
-                                <div
-                                    x-show="msg.text"
-                                    class="prose prose-invert prose-sm text-zinc-300 font-light leading-relaxed"
-                                    x-html="parse(msg.text)"
-                                ></div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-                <div class="h-12"></div>
-            </main>
-
-            <footer class="p-6 pt-0 z-30">
-                <div class="max-w-4xl mx-auto glass rounded-xl p-2 shadow-2xl">
-                    <form
-                        onsubmit="return false;"
-                        class="flex gap-2 bg-[#0b0b0e] rounded-lg p-1"
-                    >
-                        <input
-                            type="text"
-                            id="user-input"
-                            class="w-full bg-transparent border-none text-sm px-4 text-zinc-200 focus:outline-none font-sans placeholder-zinc-700"
-                            placeholder="Type a message..."
-                            autocomplete="off"
-                            @keydown.enter.prevent="$el.closest('form').querySelector('button').click()"
-                        />
-                        <button
-                            type="button"
-                            onclick="window.sendMsg()"
-                            class="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md text-xs font-bold transition-colors"
-                        >
-                            SEND
-                        </button>
-                    </form>
-                </div>
-            </footer>
+                <div class="terminal-body" id="termContainer"></div>
+            </div>
         </div>
+    </div>
+    <div id="sttBar" class="stt-bar">
+        <div class="stt-waves">
+            <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <span id="sttText">Listening...</span>
+    </div>
+    <div id="configModal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Configure ArcBot</div>
+                <div class="modal-subtitle">
+                    Set up your LLM provider and workspace.
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">LLM Provider</label><select id="cfgProvider" class="form-select"
+                        onchange="onProviderChange()">
+                        <option value="">Select...</option>
+                        <option value="Ollama">Ollama (Local)</option>
+                        <option value="LM Studio">LM Studio (Local)</option>
+                        <option value="OpenAI">OpenAI</option>
+                        <option value="Claude">Claude (Anthropic)</option>
+                        <option value="Google Gemini">Google Gemini</option>
+                        <option value="NVIDIA NIM">NVIDIA NIM</option>
+                    </select>
+                </div>
+                <div id="apiKeyGroup" class="form-group" style="display: none">
+                    <label class="form-label">API Key</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="cfgApiKey" class="form-input" placeholder="sk-..." /><button
+                            class="password-toggle" onclick="togglePassword()">
+                            &#128065;
+                        </button>
+                    </div>
+                    <div class="form-hint">
+                        Stored as OPENAI_API_KEY / ANTHROPIC_API_KEY /
+                        GEMINI_API_KEY / NVIDIA_NIM_API_KEY
+                    </div>
+                </div>
+                <div id="baseUrlGroup" class="form-group" style="display: none">
+                    <label class="form-label">API Base URL</label><input type="text" id="cfgBaseUrl" class="form-input"
+                        placeholder="http://localhost:11434/v1" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Model</label><input type="text" id="cfgModel" class="form-input"
+                        placeholder="e.g. gpt-4o, claude-sonnet-4-20250514" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Workspace Directory</label><input type="text" id="cfgBaseDir"
+                        class="form-input" placeholder="/home/user/projects" />
+                    <div class="form-hint">
+                        The agent operates within this folder.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="cfgCancelBtn" onclick="hideConfigModal()" style="display: none">
+                    Cancel</button><button class="btn btn-primary" onclick="saveConfig()">
+                    Launch Agent
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="approvalOverlay" class="approval-overlay hidden">
+        <div class="approval-card">
+            <div class="approval-title">&#9888; Command Approval</div>
+            <div id="approvalCmd" class="approval-cmd"></div>
+            <div class="approval-btns">
+                <button class="btn btn-deny" onclick="respondApproval(false)">
+                    Deny</button><button class="btn btn-approve" onclick="respondApproval(true)">
+                    Approve
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        var ws,
+            isConnected = false,
+            isConfigured = false,
+            currentAssistantEl = null,
+            currentContent = "",
+            availableTools = [],
+            pendingApprovalId = null,
+            term = null,
+            fitAddon = null,
+            terminalOpen = false,
+            terminalReady = false,
+            termBuffer = [],
+            activityCounter = 0,
+            isProcessing = false,
+            currentTheme = "",
+            thinkingText = "Thinking...";
+        var reasoningText = "";
 
-        <script>
-            window.sendMsg = function () {
-                const el = document.getElementById("user-input");
-                const text = el.value.trim();
-                if (!text || !window.chatApp) return;
-                window.chatApp.send(text);
-                el.value = "";
+        /* ===== WEBSOCKET ===== */
+        function connectWS() {
+            var p = location.protocol === "https:" ? "wss" : "ws";
+            ws = new WebSocket(p + "://" + location.host + "/ws");
+            ws.onopen = function () {
+                isConnected = true;
+                fetch("/api/config")
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (c) {
+                        if (c.provider && c.model) {
+                            document.getElementById("cfgProvider").value =
+                                c.provider;
+                            document.getElementById("cfgModel").value =
+                                c.model;
+                            document.getElementById("cfgBaseDir").value =
+                                c.baseDir || "";
+                            if (c.hasKey)
+                                document.getElementById("cfgApiKey").value =
+                                    "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+                            onProviderChange();
+                            saveConfig();
+                        }
+                    })
+                    .catch(function () { });
             };
+            ws.onmessage = function (e) {
+                handleMessage(JSON.parse(e.data));
+            };
+            ws.onclose = function () {
+                isConnected = false;
+                setStatus("error", "Disconnected");
+                setTimeout(connectWS, 3000);
+            };
+            ws.onerror = function () { };
+        }
+        function send(d) {
+            if (ws && ws.readyState === 1) ws.send(JSON.stringify(d));
+        }
 
-            function app() {
-                return {
-                    configured: false,
-                    globalStatus: "",
-                    // Approval state
-                    approval: {
-                        pending: false,
-                        requestId: null,
-                        command: "",
-                    },
-                    config: {
-                        provider: "LM Studio",
-                        apiKey: "",
-                        model: "local-model",
-                    },
-                    // Directory Modal State
-                    dirModal: {
-                        open: false,
-                        path: "",
-                    },
-                    // Theme State
-                    themeModal: {
-                        open: false,
-                        tab: "presets",
-                        currentHex: "#6366f1",
-                        tempHex: "#6366f1",
-                        inputHex: "6366F1",
-                        rgb: { r: 99, g: 102, b: 241 },
-                        presets: [
-                            { name: "Indigo", hex: "#6366f1" },
-                            { name: "Crimson", hex: "#e11d48" },
-                            { name: "Emerald", hex: "#10b981" },
-                            { name: "Amber", hex: "#f59e0b" },
-                            { name: "Violet", hex: "#8b5cf6" },
-                            { name: "Cyan", hex: "#06b6d4" },
-                            { name: "Rose", hex: "#f43f5e" },
-                            { name: "Lime", hex: "#84cc16" },
-                        ],
-                    },
-                    msgs: [],
-                    ws: null,
-                    currentId: null,
-
-                    connect() {
-                        window.chatApp = this;
-                        const proto =
-                            location.protocol === "https:" ? "wss:" : "ws:";
-                        this.ws = new WebSocket(
-                            `${proto}//${location.host}/ws`,
+        function handleMessage(d) {
+            switch (d.type) {
+                case "config_success":
+                    isConfigured = true;
+                    hideConfigModal();
+                    document.getElementById("chatInput").disabled = false;
+                    document.getElementById("sendBtn").disabled = false;
+                    setStatus("ready", "Ready");
+                    initSTT();
+                    break;
+                case "status":
+                    var t = d.text || "";
+                    if (t === "Ready") {
+                        setStatus("ready", "Ready");
+                        setProcessing(false);
+                    } else if (t.indexOf("Approval") >= 0)
+                        setStatus("waiting", t);
+                    else setStatus("working", t);
+                    break;
+                case "start":
+                    currentContent = "";
+                    reasoningText = "";
+                    currentAssistantEl = addMessage("assistant", "");
+                    showThinking(currentAssistantEl, "Thinking...");
+                    setProcessing(true);
+                    break;
+                case "chunk":
+                    if (currentAssistantEl) {
+                        hideThinking(currentAssistantEl);
+                        currentContent += d.content;
+                        renderMD(currentAssistantEl, currentContent);
+                        scrollBot();
+                    }
+                    break;
+                case "end":
+                    currentAssistantEl = null;
+                    currentContent = "";
+                    reasoningText = "";
+                    setProcessing(false);
+                    break;
+                case "generation_stopped":
+                    currentAssistantEl = null;
+                    currentContent = "";
+                    reasoningText = "";
+                    setProcessing(false);
+                    setStatus("ready", "Ready");
+                    break;
+                case "reasoning_chunk":
+                    if (currentAssistantEl && d.content) {
+                        reasoningText += d.content;
+                        updateReasoning(currentAssistantEl, reasoningText);
+                    }
+                    break;
+                case "thinking_status":
+                    thinkingText = d.text || "Thinking...";
+                    if (currentAssistantEl) {
+                        var ti = currentAssistantEl.querySelector(
+                            ".thinking-indicator .think-text",
                         );
-
-                        this.ws.onmessage = (e) => {
-                            const data = JSON.parse(e.data);
-                            this.handle(data);
-                        };
-                    },
-                    updateDirectory() {
-                        if (!this.dirModal.path) return;
-
-                        this.ws.send(
-                            JSON.stringify({
-                                type: "update_directory",
-                                path: this.dirModal.path,
-                            }),
+                        if (ti) ti.textContent = thinkingText;
+                    }
+                    break;
+                case "tool_call":
+                    addToolActivity(d.name, d.args);
+                    if (currentAssistantEl)
+                        updateThinkingText(
+                            currentAssistantEl,
+                            "Running " + d.name + "...",
                         );
-
-                        this.dirModal.open = false;
-                    },
-                    // Theme Logic
-                    applyTheme(hex) {
-                        this.themeModal.currentHex = hex;
-                        this.themeModal.tempHex = hex;
-                        this.themeModal.inputHex = hex
-                            .replace("#", "")
-                            .toUpperCase();
-
-                        // Convert Hex to RGB for inputs and CSS vars
-                        const r = parseInt(hex.slice(1, 3), 16);
-                        const g = parseInt(hex.slice(3, 5), 16);
-                        const b = parseInt(hex.slice(5, 7), 16);
-                        this.themeModal.rgb = { r, g, b };
-
-                        this.updateCSSVariables(r, g, b);
-                    },
-
-                    updateCustomFromPicker(hex) {
-                        this.themeModal.inputHex = hex
-                            .replace("#", "")
-                            .toUpperCase();
-                        const r = parseInt(hex.slice(1, 3), 16);
-                        const g = parseInt(hex.slice(3, 5), 16);
-                        const b = parseInt(hex.slice(5, 7), 16);
-                        this.themeModal.rgb = { r, g, b };
-                        this.applyTheme(hex);
-                    },
-
-                    updateCustomFromHex(val) {
-                        if (val.length === 6) {
-                            const hex = "#" + val;
-                            this.applyTheme(hex);
-                        }
-                    },
-
-                    updateCustomFromRGB() {
-                        const { r, g, b } = this.themeModal.rgb;
-                        // clamp
-                        const rc = Math.min(255, Math.max(0, r));
-                        const gc = Math.min(255, Math.max(0, g));
-                        const bc = Math.min(255, Math.max(0, b));
-
-                        // to hex
-                        const toHex = (c) => {
-                            const hex = c.toString(16);
-                            return hex.length === 1 ? "0" + hex : hex;
-                        };
-
-                        const hex = `#${toHex(rc)}${toHex(gc)}${toHex(bc)}`;
-                        this.themeModal.tempHex = hex;
-                        this.themeModal.inputHex = hex
-                            .replace("#", "")
-                            .toUpperCase();
-                        this.themeModal.currentHex = hex;
-                        this.updateCSSVariables(rc, gc, bc);
-                    },
-
-                    updateCSSVariables(r, g, b) {
-                        // Apply Main Color
-                        document.documentElement.style.setProperty(
-                            "--primary-rgb",
-                            `${r} ${g} ${b}`,
+                    break;
+                case "tool_result":
+                    updateToolActivity(d.name, d.result);
+                    break;
+                case "tool_start":
+                    if (currentAssistantEl)
+                        showThinking(
+                            currentAssistantEl,
+                            "Executing tools...",
                         );
-
-                        // Calculate Hover (darker)
-                        const hr = Math.max(0, r - 30);
-                        const hg = Math.max(0, g - 30);
-                        const hb = Math.max(0, b - 30);
-                        document.documentElement.style.setProperty(
-                            "--primary-hover-rgb",
-                            `${hr} ${hg} ${hb}`,
+                    break;
+                case "tool_end":
+                    break;
+                case "tools_discovered":
+                    availableTools = d.tools || [];
+                    renderToolsList();
+                    break;
+                case "todo_list_data":
+                    parseTodoList(d.raw || "");
+                    break;
+                case "request_approval":
+                    pendingApprovalId = d.requestId;
+                    document.getElementById("approvalCmd").textContent =
+                        d.command;
+                    document
+                        .getElementById("approvalOverlay")
+                        .classList.remove("hidden");
+                    if (currentAssistantEl)
+                        updateThinkingText(
+                            currentAssistantEl,
+                            "Waiting for approval...",
                         );
-                    },
-
-                    updateModelDefault() {
-                        const defaults = {
-                            "LM Studio": "local-model",
-                            Ollama: "deepseek-r1",
-                            "Google Gemini": "gemini-2.0-flash-exp",
-                            OpenAI: "gpt-4o",
-                        };
-
-                        if (defaults[this.config.provider]) {
-                            this.config.model = defaults[this.config.provider];
-                        }
-                    },
-
-                    submitConfig() {
-                        if (!this.config.provider) return;
-                        this.ws.send(
-                            JSON.stringify({
-                                type: "configure",
-                                config: this.config,
-                            }),
-                        );
-                    },
-
-                    send(text) {
-                        this.msgs.push({
-                            id: Date.now(),
-                            role: "user",
-                            text: text,
-                        });
-                        this.ws.send(
-                            JSON.stringify({ type: "message", content: text }),
-                        );
-                        this.scroll();
-                    },
-
-                    // Handle Approval Actions
-                    sendApproval(approved) {
-                        if (!this.approval.requestId) return;
-                        this.ws.send(
-                            JSON.stringify({
-                                type: "approval_response",
-                                requestId: this.approval.requestId,
-                                approved: approved,
-                            }),
-                        );
-                        this.approval.pending = false;
-                        this.approval.requestId = null;
-                        this.approval.command = "";
-                    },
-
-                    triggerReset() {
-                        if (this.msgs.length === 0) return;
-                        this.msgs.forEach((m) => (m.snapped = true));
-                        setTimeout(() => {
-                            this.msgs = [];
-                            this.submitConfig();
-                        }, 1000);
-                    },
-
-                    switchProvider() {
-                        this.msgs = [];
-                        this.configured = false;
-                        this.globalStatus = "";
-                    },
-
-                    handle(data) {
-                        // Handle Approval Request
-                        if (data.type === "request_approval") {
-                            this.approval.command = data.command;
-                            this.approval.requestId = data.requestId;
-                            this.approval.pending = true;
-                        }
-
-                        if (data.type === "status") {
-                            const m = this.getCurrent();
-                            if (m) {
-                                m.status = data.text;
-                            }
-                            this.globalStatus = data.text;
-                        }
-
-                        if (data.type === "config_success") {
-                            this.configured = true;
-                        } else if (data.type === "start") {
-                            this.currentId = Date.now();
-                            this.msgs.push({
-                                id: this.currentId,
-                                role: "assistant",
-                                text: "",
-                                thought: "",
-                                status: "Thinking...",
-                                snapped: false,
-                            });
-                        } else if (data.type === "chunk") {
-                            const msg = this.getCurrent();
-                            if (!msg) return;
-
-                            let txt = data.content;
-
-                            if (txt.includes("<think>")) {
-                                msg.thinking = true;
-                                txt = txt.replace("<think>", "");
-                            }
-                            if (txt.includes("</think>")) {
-                                const parts = txt.split("</think>");
-                                msg.thought += parts[0];
-                                msg.text += parts[1];
-                                msg.thinking = false;
-                            } else {
-                                if (msg.thinking) msg.thought += txt;
-                                else msg.text += txt;
-                            }
-                        }
-                        this.scroll();
-                    },
-
-                    getCurrent() {
-                        return this.msgs.find((m) => m.id === this.currentId);
-                    },
-                    parse(txt) {
-                        return marked.parse(txt || "");
-                    },
-                    scroll() {
-                        this.$nextTick(() => {
-                            const b = document.getElementById("chat-box");
-                            if (b) {
-                                b.scrollTop = b.scrollHeight;
-                                hljs.highlightAll();
-                            }
-                        });
-                    },
-                };
+                    break;
+                case "terminal_data":
+                    writeToTerminal(d.data);
+                    break;
             }
-        </script>
-    </body>
+        }
+
+        /* ===== TERMINAL (cross-platform, floating right) ===== */
+        function writeToTerminal(data) {
+            if (terminalReady && term) {
+                term.write(data);
+            } else {
+                termBuffer.push(data);
+            }
+            updateTerminalBadge();
+        }
+        function initTerminal() {
+            if (term) {
+                terminalReady = true;
+                flushTermBuffer();
+                return;
+            }
+            var c = document.getElementById("termContainer");
+            if (!c || c.offsetWidth < 10) {
+                setTimeout(initTerminal, 200);
+                return;
+            }
+            term = new Terminal({
+                theme: {
+                    background: "#0a0a0f",
+                    foreground: "#e8e8f0",
+                    cursor: "#6c6cf0",
+                    selectionBackground: "rgba(108,108,240,.3)",
+                    black: "#0a0a0f",
+                    red: "#f05555",
+                    green: "#3dd68c",
+                    yellow: "#f0a030",
+                    blue: "#6c6cf0",
+                    magenta: "#c070f0",
+                    cyan: "#40d0e0",
+                    white: "#e8e8f0",
+                },
+                fontFamily: "'JetBrains Mono',monospace",
+                fontSize: 12,
+                lineHeight: 1.3,
+                cursorBlink: true,
+                cursorStyle: "bar",
+                scrollback: 5000,
+            });
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(c);
+            try {
+                fitAddon.fit();
+            } catch (e) { }
+            term.onData(function (d) {
+                send({ type: "terminal_input", data: d });
+            });
+            new ResizeObserver(function () {
+                try {
+                    if (fitAddon) fitAddon.fit();
+                } catch (e) { }
+                if (term && term.cols && term.rows)
+                    send({
+                        type: "terminal_resize",
+                        cols: term.cols,
+                        rows: term.rows,
+                    });
+            }).observe(c);
+            terminalReady = true;
+            flushTermBuffer();
+            updateTerminalBadge();
+        }
+        function flushTermBuffer() {
+            if (term && termBuffer.length > 0) {
+                for (var i = 0; i < termBuffer.length; i++)
+                    term.write(termBuffer[i]);
+                termBuffer = [];
+            }
+        }
+        function openTerminal() {
+            if (!terminalOpen) {
+                document
+                    .getElementById("terminalPanel")
+                    .classList.add("open");
+                terminalOpen = true;
+                document.getElementById("termBtn").classList.add("active");
+                // Wait for CSS transition (300ms) to give the container width, then init
+                setTimeout(function () {
+                    initTerminal();
+                    setTimeout(function () {
+                        if (fitAddon)
+                            try {
+                                fitAddon.fit();
+                            } catch (e) { }
+                        flushTermBuffer();
+                    }, 150);
+                }, 350);
+            }
+        }
+        function toggleTerminal() {
+            if (terminalOpen) {
+                document
+                    .getElementById("terminalPanel")
+                    .classList.remove("open");
+                terminalOpen = false;
+                document
+                    .getElementById("termBtn")
+                    .classList.remove("active");
+            } else openTerminal();
+            updateTerminalBadge();
+        }
+        function updateTerminalBadge() {
+            var btn = document.getElementById("termBtn");
+            if (!btn) return;
+            var pending = terminalReady ? 0 : termBuffer.length;
+            btn.title = pending
+                ? "Terminal (" + pending + " buffered events)"
+                : "Terminal";
+        }
+
+        /* ===== MESSAGES ===== */
+        function addMessage(role, content) {
+            var w = document.getElementById("welcomeScreen");
+            if (w) w.remove();
+            var c = document.getElementById("messages"),
+                d = document.createElement("div");
+            d.className = "message " + role;
+            d.innerHTML =
+                role === "assistant"
+                    ? '<div class="msg-avatar">A</div><div class="msg-body"><div class="msg-content"></div></div>'
+                    : '<div class="msg-body"><div class="msg-content"></div></div>';
+            c.appendChild(d);
+            if (role === "user")
+                d.querySelector(".msg-content").textContent = content;
+            scrollBot();
+            return d;
+        }
+        function showThinking(el, text) {
+            if (!el) return;
+            hideThinking(el);
+            var b = el.querySelector(".msg-body"),
+                i = document.createElement("div");
+            i.className = "thinking-indicator";
+            i.innerHTML =
+                '<span class="think-dot"></span><span class="think-dot"></span><span class="think-dot"></span><span class="think-text">' +
+                (text || thinkingText) +
+                "</span>";
+            b.appendChild(i);
+        }
+        function ensureReasoningPanel(el) {
+            var body = el.querySelector(".msg-body");
+            var wrap = body.querySelector(".reasoning-wrap");
+            if (wrap) return wrap;
+            wrap = document.createElement("div");
+            wrap.className = "reasoning-wrap";
+            wrap.innerHTML =
+                '<button class="reasoning-toggle" type="button" aria-expanded="false"><span class="reasoning-caret">&#9654;</span><span class="reasoning-label">Thought process</span></button><div class="reasoning-content"></div>';
+            var toggle = wrap.querySelector(".reasoning-toggle");
+            toggle.onclick = function () {
+                var isOpen = wrap.classList.toggle("open");
+                toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            };
+            var contentNode = body.querySelector(".msg-content");
+            body.insertBefore(wrap, contentNode);
+            return wrap;
+        }
+        function updateReasoning(el, text) {
+            var wrap = ensureReasoningPanel(el);
+            var content = wrap.querySelector(".reasoning-content");
+            content.textContent = text;
+        }
+        function updateThinkingText(el, text) {
+            if (!el) return;
+            var ti = el.querySelector(".thinking-indicator .think-text");
+            if (ti) ti.textContent = text;
+            else showThinking(el, text);
+        }
+        function hideThinking(el) {
+            if (!el) return;
+            var i = el.querySelector(".thinking-indicator");
+            if (i) i.remove();
+        }
+
+        /* ===== MARKDOWN ===== */
+        marked.setOptions({
+            highlight: function (c, l) {
+                if (l && hljs.getLanguage(l))
+                    try {
+                        return hljs.highlight(c, { language: l }).value;
+                    } catch (e) { }
+                try {
+                    return hljs.highlightAuto(c).value;
+                } catch (e) { }
+                return c;
+            },
+            breaks: true,
+            gfm: true,
+        });
+        var ren = new marked.Renderer();
+        ren.code = function (code, lang) {
+            var hl;
+            try {
+                hl =
+                    lang && hljs.getLanguage(lang)
+                        ? hljs.highlight(code, { language: lang }).value
+                        : hljs.highlightAuto(code).value;
+            } catch (e) {
+                hl = code
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+            }
+            var l = lang || "code",
+                id = "c" + Math.random().toString(36).substr(2, 6);
+            return (
+                '<div class="code-header"><span>' +
+                l +
+                '</span><button class="copy-btn" onclick="copyCode(\'' +
+                id +
+                '\')">Copy</button></div><pre id="' +
+                id +
+                '"><code class="hljs">' +
+                hl +
+                "</code></pre>"
+            );
+        };
+        marked.use({ renderer: ren });
+        function renderMD(el, c) {
+            var m = el.querySelector(".msg-content");
+            try {
+                m.innerHTML = marked.parse(c);
+            } catch (e) {
+                m.textContent = c;
+            }
+        }
+        function copyCode(id) {
+            var p = document.getElementById(id);
+            if (!p) return;
+            navigator.clipboard.writeText(p.textContent).then(function () {
+                var b =
+                    p.previousElementSibling &&
+                    p.previousElementSibling.querySelector(".copy-btn");
+                if (b) {
+                    b.textContent = "Copied!";
+                    setTimeout(function () {
+                        b.textContent = "Copy";
+                    }, 1500);
+                }
+            });
+        }
+
+        /* ===== SEND / STOP ===== */
+        function sendMessage() {
+            var i = document.getElementById("chatInput"),
+                t = i.value.trim();
+            if (!t || !isConfigured) return;
+            addMessage("user", t);
+            send({ type: "message", content: t });
+            i.value = "";
+            i.style.height = "auto";
+            document.getElementById("sendBtn").disabled = true;
+            scrollBot();
+        }
+        function sendHint(el) {
+            if (!isConfigured) {
+                showConfigModal();
+                return;
+            }
+            document.getElementById("chatInput").value = el.textContent;
+            sendMessage();
+        }
+        function stopGeneration() {
+            send({ type: "stop_generation" });
+            setProcessing(false);
+            setStatus("ready", "Stopped");
+        }
+        function setProcessing(v) {
+            isProcessing = v;
+            document
+                .getElementById("stopBtn")
+                .classList.toggle("visible", v);
+            document.getElementById("sendBtn").style.display = v
+                ? "none"
+                : "flex";
+        }
+        function setStatus(t, x) {
+            var b = document.getElementById("statusBadge");
+            b.className = "status-badge " + t;
+            b.textContent = x;
+        }
+
+        /* ===== TOOL ACTIVITY ===== */
+        function addToolActivity(name, args) {
+            var p = document.getElementById("toolActivity"),
+                e = p.querySelector(".empty-state");
+            if (e) e.remove();
+            activityCounter++;
+            var d = document.createElement("div");
+            d.className = "tool-item";
+            d.id = "tool-" + activityCounter;
+            d.setAttribute("data-name", name);
+            d.innerHTML =
+                '<div class="tool-item-header"><div class="tool-icon running">&#9881;</div><span class="tool-name">' +
+                esc(name) +
+                "</span></div>" +
+                (args
+                    ? '<div class="tool-args">' + esc(args) + "</div>"
+                    : "");
+            p.prepend(d);
+            var c = document.getElementById("activityCount");
+            c.style.display = "inline-flex";
+            c.textContent = activityCounter;
+        }
+        function updateToolActivity(name, result) {
+            var items = document
+                .getElementById("toolActivity")
+                .querySelectorAll(
+                    '.tool-item[data-name="' + name + '"]',
+                ),
+                item = items[0];
+            if (!item) return;
+            var icon = item.querySelector(".tool-icon"),
+                isErr = result && result.indexOf("Error") === 0;
+            icon.className = "tool-icon " + (isErr ? "error" : "success");
+            icon.innerHTML = isErr ? "&#10007;" : "&#10003;";
+            if (!item.querySelector(".tool-result-text")) {
+                var r = document.createElement("div");
+                r.className = "tool-result-text" + (isErr ? " error" : "");
+                r.textContent = result || "(no output)";
+                item.appendChild(r);
+            }
+        }
+        function renderToolsList() {
+            if (!availableTools.length) return;
+            var c = document.getElementById("toolsList"),
+                ct = document.getElementById("toolsCount");
+            ct.style.display = "inline-flex";
+            ct.textContent = availableTools.length;
+            c.innerHTML =
+                '<div style="padding-bottom:6px;font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px">' +
+                availableTools.length +
+                ' tools</div><div class="tools-grid">' +
+                availableTools
+                    .map(function (t) {
+                        return (
+                            '<span class="tool-badge">' + esc(t) + "</span>"
+                        );
+                    })
+                    .join("") +
+                "</div>";
+        }
+
+        /* ===== TODO LIST - parses exact server output ===== */
+        function parseTodoList(raw) {
+            // Format from server: "○ 🟡 [id] title" per line, or "No tasks found."
+            var lines = raw.split("\n"),
+                items = [];
+            var statusMap = {
+                "○": "pending",
+                "◐": "in_progress",
+                "●": "completed",
+                "⊘": "blocked",
+                "✕": "cancelled",
+            };
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                // Match: status_icon [anything] [id] title
+                var m = line.match(/^([○◐●⊘✕])\s*.*?\[([^\]]+)\]\s*(.+)$/);
+                if (m) {
+                    items.push({
+                        id: m[2],
+                        title: m[3].trim(),
+                        status: statusMap[m[1]] || "pending",
+                    });
+                }
+            }
+            renderTodos(items);
+        }
+        function renderTodos(items) {
+            var c = document.getElementById("todoList"),
+                tc = document.getElementById("tasksCount");
+            if (!items || items.length === 0) {
+                c.innerHTML = '<div class="empty-state">No tasks yet</div>';
+                tc.style.display = "none";
+                return;
+            }
+            tc.style.display = "inline-flex";
+            tc.textContent = items.length;
+            var statusIcons = {
+                pending: "",
+                in_progress: "&#9654;",
+                completed: "&#10003;",
+                blocked: "&#10007;",
+                cancelled: "&#10005;",
+            };
+            var html = "";
+            for (var i = 0; i < items.length; i++) {
+                var t = items[i],
+                    st = t.status || "pending",
+                    done = st === "completed" || st === "cancelled";
+                html +=
+                    '<div class="todo-item"><div class="todo-status ' +
+                    st +
+                    '">' +
+                    (statusIcons[st] || "") +
+                    '</div><div class="todo-info"><div class="todo-title' +
+                    (done ? " done" : "") +
+                    '">' +
+                    esc(t.title) +
+                    "</div></div></div>";
+            }
+            c.innerHTML = html;
+        }
+
+        /* ===== PANEL ===== */
+        function switchTab(name, el) {
+            document.querySelectorAll(".panel-tab").forEach(function (t) {
+                t.classList.remove("active");
+            });
+            document
+                .querySelectorAll(".panel-section")
+                .forEach(function (s) {
+                    s.classList.remove("active");
+                });
+            el.classList.add("active");
+            document
+                .getElementById(
+                    "panel" + name.charAt(0).toUpperCase() + name.slice(1),
+                )
+                .classList.add("active");
+        }
+        function togglePanel() {
+            var p = document.getElementById("sidePanel");
+            if (window.innerWidth <= 900) p.classList.toggle("mobile-open");
+            else p.classList.toggle("collapsed");
+        }
+
+        /* ===== SETTINGS ===== */
+        function toggleSettingsMenu() {
+            document
+                .getElementById("settingsDropdown")
+                .classList.toggle("open");
+        }
+        function closeSettingsMenu() {
+            document
+                .getElementById("settingsDropdown")
+                .classList.remove("open");
+        }
+        document.addEventListener("click", function (e) {
+            if (
+                !e.target.closest("#settingsBtn") &&
+                !e.target.closest("#settingsDropdown")
+            )
+                closeSettingsMenu();
+        });
+
+        function setTheme(cls) {
+            document.body.className = cls;
+            currentTheme = cls;
+            document.querySelectorAll(".theme-chip").forEach(function (c) {
+                c.classList.remove("active");
+            });
+            var chips = document.querySelectorAll(".theme-chip");
+            for (var i = 0; i < chips.length; i++) {
+                var expected = "";
+                if (chips[i].textContent === "Dark") expected = "";
+                else if (chips[i].textContent === "Light")
+                    expected = "theme-light";
+                else if (chips[i].textContent === "Midnight")
+                    expected = "theme-midnight";
+                else if (chips[i].textContent === "Forest")
+                    expected = "theme-forest";
+                if (expected === cls) chips[i].classList.add("active");
+            }
+            try {
+                localStorage.setItem("arcbot-theme", cls);
+            } catch (e) { }
+        }
+        function showConfigModal() {
+            document
+                .getElementById("configModal")
+                .classList.remove("hidden");
+            if (isConfigured)
+                document.getElementById("cfgCancelBtn").style.display =
+                    "block";
+        }
+        function hideConfigModal() {
+            document.getElementById("configModal").classList.add("hidden");
+        }
+        function clearChat() {
+            document.getElementById("messages").innerHTML =
+                '<div id="welcomeScreen" class="welcome-screen"><div class="welcome-icon">A</div><div class="welcome-title">ArcBot Agent</div><div class="welcome-subtitle">Chat cleared.</div></div>';
+            currentAssistantEl = null;
+            currentContent = "";
+            setProcessing(false);
+        }
+
+        function onProviderChange() {
+            var p = document.getElementById("cfgProvider").value,
+                nk =
+                    ["OpenAI", "Claude", "Google Gemini", "NVIDIA NIM"].indexOf(
+                        p,
+                    ) >= 0,
+                il = ["Ollama", "LM Studio", "NVIDIA NIM"].indexOf(p) >= 0;
+            document.getElementById("apiKeyGroup").style.display = nk
+                ? "block"
+                : "none";
+            document.getElementById("baseUrlGroup").style.display = il
+                ? "block"
+                : "none";
+            if (p === "Ollama")
+                document.getElementById("cfgBaseUrl").value =
+                    "http://localhost:11434/v1";
+            else if (p === "LM Studio")
+                document.getElementById("cfgBaseUrl").value =
+                    "http://localhost:1234/v1";
+            else if (p === "NVIDIA NIM")
+                document.getElementById("cfgBaseUrl").value =
+                    "https://integrate.api.nvidia.com/v1";
+            else document.getElementById("cfgBaseUrl").value = "";
+            var hints = {
+                Ollama: "qwen2.5:14b",
+                "LM Studio": "local-model",
+                OpenAI: "gpt-4o",
+                Claude: "claude-sonnet-4-20250514",
+                "Google Gemini": "gemini-2.5-flash",
+                "NVIDIA NIM": "meta/llama-3.1-70b-instruct",
+            },
+                mi = document.getElementById("cfgModel");
+            if (!mi.value) mi.placeholder = hints[p] || "model name";
+        }
+        function saveConfig() {
+            var pr = document.getElementById("cfgProvider").value,
+                mo = document.getElementById("cfgModel").value,
+                ak = document.getElementById("cfgApiKey").value,
+                bd = document.getElementById("cfgBaseDir").value,
+                bu = document.getElementById("cfgBaseUrl").value;
+            if (!pr || !mo) {
+                alert("Select a provider and enter a model name.");
+                return;
+            }
+            setStatus("working", "Connecting...");
+            send({
+                type: "configure",
+                config: {
+                    provider: pr,
+                    model: mo,
+                    apiKey:
+                        ak ===
+                            "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+                            ? ""
+                            : ak,
+                    baseDir: bd,
+                    baseUrl: bu,
+                },
+            });
+        }
+        function togglePassword() {
+            var i = document.getElementById("cfgApiKey");
+            i.type = i.type === "password" ? "text" : "password";
+        }
+        function respondApproval(a) {
+            if (pendingApprovalId)
+                send({
+                    type: "approval_response",
+                    requestId: pendingApprovalId,
+                    approved: a,
+                });
+            pendingApprovalId = null;
+            document
+                .getElementById("approvalOverlay")
+                .classList.add("hidden");
+        }
+
+        /* ===== STT ===== */
+        var recognition = null,
+            wakeRecognition = null,
+            isManualListening = false,
+            silenceTimer = null;
+        var WAKE_WORDS = [
+            "hey arcbot",
+            "hey agent",
+            "hello arcbot",
+            "hello agent",
+        ];
+        var SpeechRec =
+            window.SpeechRecognition ||
+            window.webkitSpeechRecognition ||
+            null;
+        function initSTT() {
+            if (!SpeechRec) return;
+            if (
+                navigator.mediaDevices &&
+                navigator.mediaDevices.getUserMedia
+            ) {
+                navigator.mediaDevices
+                    .getUserMedia({ audio: true })
+                    .then(function (s) {
+                        s.getTracks().forEach(function (t) {
+                            t.stop();
+                        });
+                        startWakeListener();
+                    })
+                    .catch(function () { });
+            } else startWakeListener();
+        }
+        function startWakeListener() {
+            if (isManualListening || !SpeechRec) return;
+            try {
+                if (wakeRecognition)
+                    try {
+                        wakeRecognition.abort();
+                    } catch (e) { }
+                wakeRecognition = new SpeechRec();
+                wakeRecognition.continuous = true;
+                wakeRecognition.interimResults = true;
+                wakeRecognition.lang = "en-US";
+                wakeRecognition.onresult = function (e) {
+                    for (var i = e.resultIndex; i < e.results.length; i++) {
+                        var t = e.results[i][0].transcript
+                            .toLowerCase()
+                            .trim();
+                        for (var j = 0; j < WAKE_WORDS.length; j++) {
+                            if (t.indexOf(WAKE_WORDS[j]) >= 0) {
+                                try {
+                                    wakeRecognition.abort();
+                                } catch (ex) { }
+                                startActiveSTT();
+                                return;
+                            }
+                        }
+                    }
+                };
+                wakeRecognition.onerror = function (e) {
+                    if (e.error !== "no-speech" && e.error !== "aborted")
+                        setTimeout(function () {
+                            if (!isManualListening) startWakeListener();
+                        }, 3000);
+                };
+                wakeRecognition.onend = function () {
+                    if (!isManualListening)
+                        setTimeout(startWakeListener, 1000);
+                };
+                wakeRecognition.start();
+                document
+                    .getElementById("micBtn")
+                    .classList.add("wake-listening");
+            } catch (e) { }
+        }
+        function startActiveSTT() {
+            if (!SpeechRec) return;
+            isManualListening = true;
+            try {
+                if (wakeRecognition) wakeRecognition.abort();
+            } catch (e) { }
+            document
+                .getElementById("micBtn")
+                .classList.remove("wake-listening");
+            document.getElementById("micBtn").classList.add("listening");
+            showSTT("Listening...");
+            recognition = new SpeechRec();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = "en-US";
+            var finalText = "";
+            resetSilenceTimer();
+            recognition.onresult = function (e) {
+                var interim = "";
+                finalText = "";
+                for (var i = 0; i < e.results.length; i++) {
+                    var txt = e.results[i][0].transcript;
+                    if (e.results[i].isFinal) {
+                        for (var w = 0; w < WAKE_WORDS.length; w++) {
+                            var re = new RegExp(
+                                "^\\s*" +
+                                WAKE_WORDS[w].replace(/\s+/g, "\\s+") +
+                                "[,.]?\\s*",
+                                "i",
+                            );
+                            txt = txt.replace(re, "");
+                        }
+                        finalText += txt;
+                    } else interim += txt;
+                }
+                var display = (
+                    finalText + (interim ? " " + interim : "")
+                ).trim();
+                document.getElementById("chatInput").value = display;
+                showSTT(display || "Listening...");
+                resetSilenceTimer();
+            };
+            recognition.onerror = function (e) {
+                if (e.error !== "no-speech" && e.error !== "aborted")
+                    stopActiveSTT();
+            };
+            recognition.onend = function () {
+                if (isManualListening) submitSTT();
+            };
+            try {
+                recognition.start();
+            } catch (e) {
+                stopActiveSTT();
+            }
+        }
+        function resetSilenceTimer() {
+            if (silenceTimer) clearTimeout(silenceTimer);
+            silenceTimer = setTimeout(function () {
+                if (isManualListening) submitSTT();
+            }, 10000);
+        }
+        function submitSTT() {
+            if (silenceTimer) {
+                clearTimeout(silenceTimer);
+                silenceTimer = null;
+            }
+            var t = document.getElementById("chatInput").value.trim();
+            stopActiveSTT();
+            if (t && isConfigured) sendMessage();
+        }
+        function stopActiveSTT() {
+            isManualListening = false;
+            if (silenceTimer) {
+                clearTimeout(silenceTimer);
+                silenceTimer = null;
+            }
+            try {
+                if (recognition) recognition.abort();
+            } catch (e) { }
+            recognition = null;
+            document.getElementById("micBtn").classList.remove("listening");
+            hideSTT();
+            setTimeout(startWakeListener, 1000);
+        }
+        function toggleMic() {
+            if (isManualListening) submitSTT();
+            else startActiveSTT();
+        }
+        function showSTT(t) {
+            document.getElementById("sttBar").classList.add("active");
+            document.getElementById("sttText").textContent =
+                t || "Listening...";
+        }
+        function hideSTT() {
+            document.getElementById("sttBar").classList.remove("active");
+        }
+
+        /* ===== UTIL ===== */
+        function scrollBot() {
+            var c = document.getElementById("messages");
+            requestAnimationFrame(function () {
+                c.scrollTop = c.scrollHeight;
+            });
+        }
+        function esc(s) {
+            return s
+                ? s
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                : "";
+        }
+        document
+            .getElementById("chatInput")
+            .addEventListener("input", function () {
+                this.style.height = "auto";
+                this.style.height = Math.min(this.scrollHeight, 150) + "px";
+                document.getElementById("sendBtn").disabled =
+                    !this.value.trim();
+            });
+        document
+            .getElementById("chatInput")
+            .addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        window.addEventListener("load", function () {
+            connectWS();
+            try {
+                var t = localStorage.getItem("arcbot-theme");
+                if (t) setTheme(t);
+            } catch (e) { }
+        });
+    </script>
+</body>
+
 </html>

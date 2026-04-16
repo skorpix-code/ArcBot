@@ -12,6 +12,10 @@
     "fetch": {
       "args": ["mcp-server-fetch"],
       "command": "uvx"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
     }
   }
 }

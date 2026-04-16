@@ -13,8 +13,5 @@ wheels/
 .env
 
 #Backup files
-mcp_client_copy.py
-mcp_client_new.py
-mcp_client_voice.py
-mcp_client.py
-index_voice.html
+templates/index_voice.html
+mcp_backup.zip
