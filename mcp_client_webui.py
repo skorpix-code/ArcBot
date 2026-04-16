@@ -87,6 +87,7 @@ PROVIDER_KEY_MAP = {
     "OpenAI": "OPENAI_API_KEY",
     "Claude": "ANTHROPIC_API_KEY",
     "Google Gemini": "GEMINI_API_KEY",
+    "NVIDIA NIM": "NVIDIA_NIM_API_KEY",
 }
 
 
@@ -272,6 +273,38 @@ def _truncate_messages(messages: list, max_recent: int) -> list:
     return _sanitize_openai_messages(trimmed)
 
 
+def split_reasoning_text(text: str, in_reasoning: bool) -> tuple[str, str, bool]:
+    """Split stream text into visible content and reasoning (<think> blocks)."""
+    if not text:
+        return "", "", in_reasoning
+    visible_parts: List[str] = []
+    reasoning_parts: List[str] = []
+    rest = text
+
+    while rest:
+        if in_reasoning:
+            close_idx = rest.find("</think>")
+            if close_idx == -1:
+                reasoning_parts.append(rest)
+                rest = ""
+            else:
+                reasoning_parts.append(rest[:close_idx])
+                rest = rest[close_idx + len("</think>") :]
+                in_reasoning = False
+        else:
+            open_idx = rest.find("<think>")
+            if open_idx == -1:
+                visible_parts.append(rest)
+                rest = ""
+            else:
+                if open_idx > 0:
+                    visible_parts.append(rest[:open_idx])
+                rest = rest[open_idx + len("<think>") :]
+                in_reasoning = True
+
+    return "".join(visible_parts), "".join(reasoning_parts), in_reasoning
+
+
 class LLMConfig:
     def __init__(self, provider: str, base_url: str, api_key: str, model: str):
         self.provider = provider
@@ -297,14 +330,23 @@ class OpenAICompatibleProvider:
             async for chunk in stream:
                 if chunk.choices:
                     delta = chunk.choices[0].delta
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning is None:
+                        reasoning = getattr(delta, "reasoning", None)
                     yield {
                         "content": delta.content,
+                        "reasoning": reasoning,
                         "tool_calls": delta.tool_calls,
                         "role": delta.role,
                     }
         except Exception as e:
             console.print(f"[bold red]LLM Error:[/]{e}")
-            yield {"content": f"Error: {e}", "tool_calls": None, "role": "assistant"}
+            yield {
+                "content": f"Error: {e}",
+                "reasoning": None,
+                "tool_calls": None,
+                "role": "assistant",
+            }
 
 
 class ClaudeProvider:
@@ -401,6 +443,7 @@ class ClaudeProvider:
                         if d.type == "text_delta":
                             yield {
                                 "content": d.text,
+                                "reasoning": None,
                                 "tool_calls": None,
                                 "role": "assistant",
                             }
@@ -410,6 +453,7 @@ class ClaudeProvider:
                         if tname:
                             yield {
                                 "content": "",
+                                "reasoning": None,
                                 "tool_calls": [
                                     {
                                         "id": tid,
@@ -422,7 +466,12 @@ class ClaudeProvider:
                             tid, tname, targs = None, None, ""
         except Exception as e:
             console.print(f"[bold red]Claude Error:[/]{e}")
-            yield {"content": f"Error: {e}", "tool_calls": None, "role": "assistant"}
+            yield {
+                "content": f"Error: {e}",
+                "reasoning": None,
+                "tool_calls": None,
+                "role": "assistant",
+            }
 
 
 class GeminiNativeProvider:
@@ -507,12 +556,18 @@ class GeminiNativeProvider:
                             )
                     yield {
                         "content": chunk.text if chunk.text else "",
+                        "reasoning": None,
                         "tool_calls": tcs,
                         "role": "assistant",
                     }
         except Exception as e:
             console.print(f"[bold red]Gemini Error:[/]{e}")
-            yield {"content": f"Error: {e}", "tool_calls": None, "role": "assistant"}
+            yield {
+                "content": f"Error: {e}",
+                "reasoning": None,
+                "tool_calls": None,
+                "role": "assistant",
+            }
 
 
 class TerminalManager:
@@ -705,7 +760,8 @@ class MCPClient:
         self.tool_routing = {}
         self.pending_approvals: Dict[str, asyncio.Future] = {}
         self._shutdown = False
-        self._cancel_current = False
+        self._active_generation_id: Optional[str] = None
+        self._cancel_generation_id: Optional[str] = None
         if config.provider == "Google Gemini":
             self.llm = GeminiNativeProvider(config)
         elif config.provider == "Claude":
@@ -713,6 +769,14 @@ class MCPClient:
         else:
             self.llm = OpenAICompatibleProvider(config)
         console.log(f"[bold green]Initialized: {config.provider} ({config.model})[/]")
+
+    def request_stop(self):
+        """Cancel only the currently running generation."""
+        if self._active_generation_id:
+            self._cancel_generation_id = self._active_generation_id
+
+    def _is_generation_cancelled(self, generation_id: str) -> bool:
+        return self._cancel_generation_id == generation_id
 
     async def shutdown(self):
         self._shutdown = True
@@ -840,20 +904,24 @@ class MCPClient:
                     if self._shutdown:
                         break
 
+                    generation_id = uuid.uuid4().hex
+                    self._active_generation_id = generation_id
                     messages.append({"role": "user", "content": user_input})
                     await self.broadcast("status", {"text": "Thinking..."})
                     await self.broadcast("start")
                     await self.broadcast("thinking_status", {"text": "Thinking..."})
 
                     while not self._shutdown:
-                        # Check for user-initiated stop
-                        if self._cancel_current:
-                            self._cancel_current = False
+                        # Check for user-initiated stop for the active generation only
+                        if self._is_generation_cancelled(generation_id):
                             await self.broadcast("end")
                             await self.broadcast("status", {"text": "Ready"})
+                            await self.broadcast("thinking_status", {"text": ""})
                             break
 
-                        response_content, tc_buf = [], {}
+                        response_content, reasoning_content, tc_buf = [], [], {}
+                        in_reasoning_block = False
+                        generation_cancelled = False
 
                         # Sanitize for OpenAI, simple truncate for others
                         if isinstance(self.llm, OpenAICompatibleProvider):
@@ -866,12 +934,33 @@ class MCPClient:
                             )
 
                         async for chunk in self.llm.chat_stream(msgs_to_send, tools):
-                            if self._shutdown or self._cancel_current:
+                            if self._shutdown or self._is_generation_cancelled(
+                                generation_id
+                            ):
+                                generation_cancelled = True
                                 break
                             if chunk.get("content"):
-                                response_content.append(chunk["content"])
+                                visible_text, parsed_reasoning, in_reasoning_block = (
+                                    split_reasoning_text(
+                                        chunk["content"], in_reasoning_block
+                                    )
+                                )
+                                if visible_text:
+                                    response_content.append(visible_text)
+                                    await self.broadcast(
+                                        "chunk", {"content": visible_text}
+                                    )
+                                if parsed_reasoning:
+                                    reasoning_content.append(parsed_reasoning)
+                                    await self.broadcast(
+                                        "reasoning_chunk",
+                                        {"content": parsed_reasoning},
+                                    )
+                            if chunk.get("reasoning"):
+                                reasoning_content.append(chunk["reasoning"])
                                 await self.broadcast(
-                                    "chunk", {"content": chunk["content"]}
+                                    "reasoning_chunk",
+                                    {"content": chunk["reasoning"]},
                                 )
                             if chunk.get("tool_calls"):
                                 for tc in chunk["tool_calls"]:
@@ -895,7 +984,14 @@ class MCPClient:
                                             "args": tc["function"]["arguments"],
                                         }
 
+                        if generation_cancelled:
+                            await self.broadcast("end")
+                            await self.broadcast("status", {"text": "Ready"})
+                            await self.broadcast("thinking_status", {"text": ""})
+                            break
+
                         full = "".join(response_content)
+                        full_reasoning = "".join(reasoning_content)
                         htcs = []
                         for idx in sorted(tc_buf.keys()):
                             d = tc_buf[idx]
@@ -911,6 +1007,8 @@ class MCPClient:
                             )
 
                         amsg = {"role": "assistant", "content": full or ""}
+                        if full_reasoning:
+                            amsg["reasoning"] = full_reasoning
                         if htcs:
                             amsg["tool_calls"] = htcs
                         messages.append(amsg)
@@ -927,7 +1025,9 @@ class MCPClient:
                             {"text": f"Executing {len(htcs)} tool(s)..."},
                         )
                         for tc in htcs:
-                            if self._shutdown or self._cancel_current:
+                            if self._shutdown or self._is_generation_cancelled(
+                                generation_id
+                            ):
                                 break
                             fn = tc["function"]["name"]
                             fa = tc["function"]["arguments"]
@@ -958,7 +1058,6 @@ class MCPClient:
                                 if not ok:
                                     result = "User denied execution."
                                 else:
-                                    await self.broadcast("terminal_open")
                                     await self.broadcast(
                                         "terminal_data",
                                         {"data": f"\r\n\x1b[32m$ {cmd}\x1b[0m\r\n"},
@@ -1046,6 +1145,10 @@ class MCPClient:
                         await self.broadcast(
                             "thinking_status", {"text": "Analyzing tool results..."}
                         )
+                    if self._active_generation_id == generation_id:
+                        self._active_generation_id = None
+                    if self._cancel_generation_id == generation_id:
+                        self._cancel_generation_id = None
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -1091,7 +1194,7 @@ async def graceful_shutdown():
     while not input_queue.empty():
         try:
             input_queue.get_nowait()
-        except:
+        except asyncio.QueueEmpty:
             break
 
 
@@ -1158,6 +1261,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         base_url = "http://localhost:1234/v1"
                     elif provider == "OpenAI":
                         base_url = "https://api.openai.com/v1"
+                    elif provider == "NVIDIA NIM":
+                        base_url = "https://integrate.api.nvidia.com/v1"
                 if chat_task and not chat_task.done():
                     chat_task.cancel()
                     try:
@@ -1167,18 +1272,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 if current_client:
                     await current_client.shutdown()
                 while not input_queue.empty():
-                    input_queue.get_nowait()
+                    try:
+                        input_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
                 current_client = MCPClient(
                     LLMConfig(provider, base_url, api_key or "not-needed", model)
                 )
                 chat_task = asyncio.create_task(current_client.run_chat_loop_web())
                 await websocket.send_json({"type": "config_success"})
             elif data.get("type") == "message":
-                await input_queue.put(data.get("content"))
+                content = (data.get("content") or "").strip()
+                if content:
+                    await input_queue.put(content)
             elif data.get("type") == "stop_generation":
                 # Cancel the current chat loop iteration
                 if current_client:
-                    current_client._cancel_current = True
+                    current_client.request_stop()
                     # Cancel any pending approvals
                     for _, f in current_client.pending_approvals.items():
                         if not f.done():
