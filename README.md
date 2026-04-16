@@ -50,7 +50,7 @@ Choose **one** installation path.
 1. Clone the repository:
 
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/skorpix-code/ArcBot.git
    cd MCP_CodeAI
    ```
 
@@ -79,7 +79,7 @@ Choose **one** installation path.
 1. Clone the repository:
 
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/skorpix-code/ArcBot.git
    cd MCP_CodeAI
    ```
 
