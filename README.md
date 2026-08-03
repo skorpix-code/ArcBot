@@ -1,189 +1,190 @@
-# ArcBot MCP Client WebUI
+<div align="center">
 
-ArcBot is a FastAPI + WebSocket web interface for running an MCP-enabled AI agent with live streaming responses, tool execution visibility, command approvals, and interactive terminal output.
+# ArcBot
 
-It is designed so you can connect multiple MCP servers, choose your preferred LLM provider, and run coding/system tasks from one UI.
+**A local-first AI agent for your whole computer.**
+
+Bring your own model. Choose exactly which powers it gets.
+Watch every command, file change and tool call as it happens.
+
+[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Features](#features) · [Security](#security)
+
+</div>
+
+---
+
+ArcBot runs on your machine and does real work on it: edits code, runs commands,
+searches the web, manages windows, remembers what you told it last week. You
+decide which of those it can do, and you see everything it does in a live trace.
+
+It works with any model — a local one, an API key, or your existing Claude
+subscription with no API key at all.
+
+Linux (including Hyprland, Sway and X11), macOS and Windows. Python 3.10+.
+
+---
+
+## Install
+
+```bash
+uv tool install "arcbot[all]"     # or: pip install "arcbot[all]"
+arcbot
+```
+
+That's it. ArcBot starts, opens your browser, and walks you through setup.
+
+<details>
+<summary>From source</summary>
+
+```bash
+git clone https://github.com/skorpix-code/ArcBot && cd ArcBot
+uv sync --extra all               # or: pip install -e ".[all]"
+uv run arcbot
+```
+</details>
+
+---
+
+## Quick start
+
+Setup is four choices, and you can change any of them later.
+
+**1. Pick a model.** Paste an API key, point ArcBot at a local server, or use a
+Claude subscription you already have. The wizard shows what each one needs and
+tells you when it can see your credentials.
+
+**2. Pick a workspace.** The folder ArcBot works in. File tools cannot reach outside it.
+
+**3. Pick a trust level.** *Guarded* is the default: it reads freely, and asks
+before writing files or running commands.
+
+**4. Pick your capabilities.** Only what you enable gets loaded.
+
+Then ask it for something:
+
+> *Run the tests and fix whatever fails.*
+
+Something not working? `arcbot doctor` reports exactly what is installed,
+authenticated and missing.
+
+---
+
+## Models
+
+| Provider | What you need |
+|---|---|
+| **Claude (your subscription)** | A signed-in [Claude Code](https://code.claude.com) — no API key |
+| **Claude (API key)** | `ANTHROPIC_API_KEY` |
+| **OpenAI** | `OPENAI_API_KEY` |
+| **Google Gemini** | `GEMINI_API_KEY` |
+| **LM Studio** · **Ollama** | The app running locally. Nothing leaves your machine |
+| **OpenRouter** | `OPENROUTER_API_KEY` — one key, hundreds of models |
+| **Custom** | Any OpenAI-compatible base URL (vLLM, llama.cpp, LiteLLM, a proxy) |
+
+---
 
 ## Features
 
-- Multi-provider LLM support: `OpenAI`, `Claude`, `Google Gemini`, `Ollama`, `LM Studio`, and `NVIDIA NIM`
-- MCP tool integration via `servers_config.json` (local and remote-compatible server processes)
-- Real-time streaming responses with a collapsible reasoning/thought process section
-- Built-in command approval flow before terminal execution
-- Live terminal panel with streamed command output and interactive input support
-- Persistent configuration through `.env` (provider, model, keys, workspace path)
+**81 tools across 10 capabilities** — files and code, terminal, git, web, system,
+desktop control, long-term memory. Switch each on or off; a disabled one is never
+even imported.
 
-## Tech Stack
+**A live trace, not a chat log.** Every command shows its exact command line,
+streaming output, exit code and duration. Every edit shows a diff. Failures open
+themselves. A real terminal shares the same shell, so you can take over at any point.
 
-- Python `3.10+`
-- FastAPI + Uvicorn
-- WebSocket UI
-- MCP Python SDK
+**Trust levels that mean something.** Every command is graded before it runs, and
+your level decides where approval kicks in.
 
-## Project Structure
+| Level | Reads | Writes | Commands | Risky actions |
+|---|---|---|---|---|
+| Plan only | ✓ | — | — | — |
+| **Guarded** *(default)* | ✓ | asks | asks | asks |
+| Trusted | ✓ | ✓ | ✓ | asks |
+| Full access | ✓ | ✓ | ✓ | ✓ |
 
-- `mcp_client_webui.py` - Main web app (FastAPI server + WebSocket runtime)
-- `mcp_server.py` - Local MCP server used by default config
-- `servers_config.json` - MCP servers loaded at startup
-- `templates/index.html` - Frontend UI
-- `.env` - Local environment configuration
+**It reaches for the right tool.** Type `cat README.md` and ArcBot redirects the
+agent to `read_file` — safer, structured, less approval. Real command work runs
+untouched.
 
-## Prerequisites
+**It asks instead of failing.** If a task needs a capability you switched off,
+you get a one-click prompt and it carries straight on.
 
-Install what you need based on your setup:
+**It doesn't get stuck.** Repeat detection, step and time budgets, per-tool
+failure handling, automatic context compaction. When it does hit a wall it is
+told what it tried and what failed, so it changes approach instead of looping.
 
-- Python `3.10` or newer
-- One of:
-  - `uv` (recommended), or
-  - standard Python tooling (`venv` + `pip`)
-- Optional, depending on your MCP server config:
-  - `Node.js` (for `npx`-based MCP servers)
-  - `uvx` (for running MCP servers distributed as Python tools)
-- API key for any cloud provider you plan to use
+**Connect any MCP server.** Presets for Fetch, Git, SQLite and more in one click,
+or paste a command or URL.
 
-## Installation
+**Build your own tools.** Describe one in a sentence and your model writes it.
+You see the code, the arguments and what it can reach before anything is saved.
 
-Choose **one** installation path.
+---
 
-### Option A: Install and run with `uv` (recommended)
+## Security
 
-1. Clone the repository:
+ArcBot runs commands on your machine, so its local server is treated as privileged.
 
-   ```bash
-   git clone https://github.com/skorpix-code/ArcBot.git
-   cd MCP_CodeAI
-   ```
+- **Sandboxed files.** Every path is resolved and refused if it leaves your
+  workspace. Credential stores (`.ssh`, `.aws`, `.netrc`) are blocked even inside it.
+- **Loopback only.** Binds to `127.0.0.1`, requires a token regenerated on every
+  run, and rejects web-socket handshakes from a foreign origin.
+- **Catastrophic commands never run** — `rm -rf /`, `mkfs`, raw disk writes, fork
+  bombs — at any trust level, including Full.
+- **Secrets stay secret.** Keys are stored `0600`, never returned by the API, and
+  redacted from logs.
 
-2. Install dependencies:
+Found a security problem? Please open an issue rather than a PR.
 
-   ```bash
-   uv sync
-   ```
+---
 
-3. Create your `.env` file:
+## Command line
 
-   ```bash
-   cp .env.example .env
-   ```
-
-   If `.env.example` does not exist yet in your local copy, create `.env` manually using the template in the next section.
-
-4. Start the app:
-
-   ```bash
-   uv run python mcp_client_webui.py
-   ```
-
-### Option B: Install and run with standard Python (`venv` + `pip`)
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/skorpix-code/ArcBot.git
-   cd MCP_CodeAI
-   ```
-
-2. Create and activate a virtual environment:
-
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   pip install --upgrade pip
-   pip install -e .
-   ```
-
-4. Create your `.env` file:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   If `.env.example` does not exist yet in your local copy, create `.env` manually using the template in the next section.
-
-5. Start the app:
-
-   ```bash
-   python mcp_client_webui.py
-   ```
-
-## Environment Configuration (`.env`)
-
-Create a `.env` file in the project root. You can copy and paste this template:
-
-```env
-# --- Core app settings ---
-ARCBOT_PROVIDER=OpenAI
-ARCBOT_MODEL=gpt-4o-mini
-ARCBOT_BASE_DIR=~/ArcBot_Workspace
-
-# --- Provider API keys (fill only what you use) ---
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GEMINI_API_KEY=
-NVIDIA_NIM_API_KEY=
-
-# --- Optional provider endpoints ---
-# OpenAI-compatible local servers
-LM_STUDIO_URL=http://localhost:1234/v1
-OLLAMA_URL=http://localhost:11434/v1
-
-# --- Optional MCP transport variables (if used by your local server setup) ---
-MCP_TRANSPORT=stdio
-MCP_SERVER_COMMAND=python
-MCP_SERVER_SCRIPT=./mcp_server.py
-MCP_SSE_URL=http://localhost:8000/sse
+```bash
+arcbot                       # start (default)
+arcbot --port 9000           # different port
+arcbot --workspace ~/proj    # workspace for this run
+arcbot doctor                # check this machine's setup
+arcbot config                # print current configuration
+arcbot ask "run the tests"   # one-shot, no UI
 ```
 
-Notes:
+---
 
-- Keep secrets out of version control.
-- Use only the API keys for providers you actually use.
-- If you use local `Ollama` or `LM Studio`, make sure the local model server is running.
+## Where things live
 
-## Configure MCP Servers
+```
+~/.config/arcbot/            settings, credentials (0600), your own tools
+<workspace>/.arcbot/         memory, plan and chat transcripts
+```
 
-MCP servers are loaded from `servers_config.json`.
+Drop an `AGENTS.md` or `CLAUDE.md` in your workspace and ArcBot reads it as
+project conventions.
 
-Default configuration includes:
-
-- a local Python server (`mcp_server.py`)
-- optional utility servers started with `uvx` and `npx`
-
-If you do not have `uvx` or `npx`, remove or comment those entries from `servers_config.json`, or install the required tooling.
-
-## Run the Application
-
-After setup, open:
-
-- [http://localhost:8000](http://localhost:8000)
-
-On first use in the UI:
-
-1. Select provider
-2. Set model name
-3. Add API key (or keep blank for local providers that do not require one)
-4. Confirm workspace path
-
-The app will initialize MCP servers, discover tools, and become ready for chat.
-
-## Provider Notes
-
-- `OpenAI`: uses `OPENAI_API_KEY`
-- `Claude`: uses `ANTHROPIC_API_KEY`
-- `Google Gemini`: uses `GEMINI_API_KEY`
-- `NVIDIA NIM`: uses `NVIDIA_NIM_API_KEY` and defaults to `https://integrate.api.nvidia.com/v1`
-- `Ollama` / `LM Studio`: OpenAI-compatible local endpoints (normally no cloud API key required)
+---
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError`**: ensure dependencies are installed in the active environment.
-- **Provider auth errors**: check the correct API key variable is set in `.env`.
-- **No tools discovered**: verify `servers_config.json` commands exist on your machine.
-- **Port already in use**: free port `8000` or update app launch configuration.
-- **Local model not responding**: verify Ollama/LM Studio server is running and URL is correct.
+| Problem | Fix |
+|---|---|
+| "No model configured" | Open Settings and pick a provider, or run `arcbot doctor` |
+| Local model not responding | Check LM Studio or Ollama is running and the base URL matches |
+| Claude Code says it was blocked | Raise the trust level — headless Claude Code cannot show its own prompt |
+| A capability says "missing" | It needs an optional package: `pip install "arcbot[all]"` |
+| An MCP server will not connect | The reason is shown beside it; usually `uvx` or `npx` is not on your PATH |
+| Port already in use | ArcBot picks the next free port; pass `--port` to choose |
 
+---
+
+## Development
+
+```bash
+uv sync --extra all --extra dev
+uv run pytest                # 232 tests
+uv run ruff check arcbot
+```
+
+## License
+
+MIT

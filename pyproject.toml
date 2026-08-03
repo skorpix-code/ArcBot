@@ -1,25 +1,75 @@
 [project]
-name = "mcp-codeai"
-version = "0.1.0"
-description = "Add your description here"
+name = "arcbot"
+version = "1.0.0"
+description = "A local-first AI agent for your whole computer — bring your own model, choose its powers, watch every move."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "anthropic>=0.72.0",
-    "ddgs>=9.10.0",
-    "fastapi>=0.128.0",
-    "faster-whisper>=1.2.1",
-    "google-genai>=1.60.0",
-    "jinja2>=3.1.6",
-    "mcp>=1.25.0",
-    "numpy>=2.2.6",
-    "openai>=2.15.0",
-    "psutil>=7.2.2",
-    "pygame>=2.6.1",
-    "python-dotenv>=1.2.1",
-    "questionary>=2.1.1",
-    "rich>=14.3.0",
-    "soundfile>=0.13.1",
-    "uvicorn>=0.40.0",
-    "websockets>=15.0.1",
+license = { text = "MIT" }
+authors = [{ name = "skorpix-code" }]
+keywords = ["ai", "agent", "llm", "automation", "claude", "local-first"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Utilities",
 ]
+
+# Kept deliberately small: this is what `pip install arcbot` must fetch before
+# the app can start. Anything heavier is an optional extra.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "websockets>=12",
+    "anthropic>=0.69",
+    "openai>=1.60",
+    "psutil>=5.9",
+    "mcp>=1.9",
+]
+
+[project.optional-dependencies]
+web = ["ddgs>=9.0"]
+google = ["google-genai>=1.0"]
+all = ["ddgs>=9.0", "google-genai>=1.0"]
+dev = ["ruff>=0.6", "pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+arcbot = "arcbot.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/skorpix-code/ArcBot"
+Issues = "https://github.com/skorpix-code/ArcBot/issues"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["arcbot*"]
+
+[tool.setuptools.package-data]
+"arcbot.web" = ["static/*", "templates/*"]
+
+[tool.ruff]
+line-length = 108
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    "E501",    # long lines are handled by the formatter
+    "B008",    # FastAPI Depends() in a default is the documented pattern
+    "SIM105",  # contextlib.suppress is not always clearer
+    "RUF001",  # typographic characters in UI copy are intentional
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"arcbot/native/*" = ["ALL"]      # carried-over platform code, kept as-is
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
