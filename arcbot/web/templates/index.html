@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>ArcBot</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 24a12 12 0 0 1 24 0' stroke='%236fd0ff' stroke-width='3' fill='none' stroke-linecap='round'/><circle cx='16' cy='24' r='2.5' fill='%236fd0ff'/></svg>" />
+  <link rel="stylesheet" href="/static/xterm.min.css" />
+  <link rel="stylesheet" href="/static/github-dark.min.css" />
+  <link rel="stylesheet" href="/static/arcbot.css" />
+</head>
+
+<body>
+  <!-- ═══════════════════════════════ shell ═══════════════════════════════ -->
+  <div class="app" id="app" hidden>
+
+    <header class="rail" role="banner">
+      <div class="rail__brand">
+        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="18" r="1.9" fill="currentColor"/></svg>
+        <span class="wordmark">ARCBOT</span>
+      </div>
+
+      <button class="chip" id="workspaceChip" type="button" title="Workspace folder">
+        <span class="chip__key">dir</span>
+        <span class="chip__val" id="workspaceLabel">—</span>
+      </button>
+
+      <button class="chip chip--trust" id="trustChip" type="button" title="Permission mode">
+        <span class="chip__dot" aria-hidden="true"></span>
+        <span class="chip__val" id="trustLabel">guarded</span>
+      </button>
+
+      <button class="chip" id="modelChip" type="button" title="Model">
+        <span class="chip__key">model</span>
+        <span class="chip__val" id="modelLabel">—</span>
+      </button>
+
+      <div class="rail__spacer"></div>
+
+      <div class="status" id="statusPill" data-state="idle">
+        <span class="status__led" aria-hidden="true"></span>
+        <span class="status__text" id="statusText">Ready</span>
+      </div>
+
+      <button class="icon-btn" id="themeBtn" type="button" title="Switch theme" aria-label="Switch theme">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5"
+          stroke="currentColor" stroke-width="1.6"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17Z"
+          fill="currentColor"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" type="button" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+          stroke-width="1.7" stroke-linecap="round"><path d="M4 7h11M19 7h1M4 17h5M13 17h7"/>
+          <circle cx="17" cy="7" r="2.2"/><circle cx="11" cy="17" r="2.2"/></svg>
+      </button>
+    </header>
+
+    <div class="body">
+      <!-- ─────────────────────────── side ─────────────────────────── -->
+      <aside class="side" id="side" aria-label="Session panel">
+        <section class="panel" id="planPanel" hidden>
+          <h2 class="panel__title">Plan</h2>
+          <ol class="plan" id="planList"></ol>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel__title">
+            Capabilities
+            <span class="panel__hint" id="toolCount"></span>
+          </h2>
+          <ul class="toolsets" id="toolsetList"></ul>
+        </section>
+
+        <section class="panel">
+          <h2 class="panel__title">Context</h2>
+          <div class="meter" id="contextMeter">
+            <div class="meter__fill" id="contextFill"></div>
+          </div>
+          <dl class="stats" id="statsList">
+            <div><dt>used</dt><dd id="statContext">0%</dd></div>
+            <div><dt>in</dt><dd id="statIn">0</dd></div>
+            <div><dt>out</dt><dd id="statOut">0</dd></div>
+            <div><dt>cost</dt><dd id="statCost">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel panel--grow">
+          <h2 class="panel__title">
+            History
+            <button class="mini-btn" id="newChatBtn" type="button">new</button>
+          </h2>
+          <ul class="sessions" id="sessionList"></ul>
+        </section>
+      </aside>
+
+      <!-- ────────────────────────── transcript ────────────────────────── -->
+      <main class="main">
+        <div class="trace" id="trace" tabindex="0">
+          <div class="spine" id="spine" aria-hidden="true"></div>
+          <div class="trace__inner" id="traceInner">
+            <div class="empty" id="emptyState">
+              <div class="empty__mark" aria-hidden="true"><svg  viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="18" r="1.9" fill="currentColor"/></svg></div>
+              <h1 class="empty__title">What should I do?</h1>
+              <p class="empty__sub">
+                I work on your machine, in <code id="emptyWorkspace">your workspace</code>.
+                Every command and file change shows up here as it happens.
+              </p>
+              <ul class="starters" id="starters"></ul>
+            </div>
+          </div>
+        </div>
+
+        <section class="console" id="console" data-open="false">
+          <button class="console__bar" id="consoleToggle" type="button" aria-expanded="false">
+            <span class="console__caret" aria-hidden="true">›</span>
+            <span class="console__label">Terminal</span>
+            <span class="console__meta" id="consoleMeta"></span>
+          </button>
+          <div class="console__body"><div id="term"></div></div>
+        </section>
+
+        <footer class="composer" id="composer">
+          <div class="composer__alert" id="pendingAlert" hidden>
+            <span class="composer__alert-dot" aria-hidden="true"></span>
+            <span id="pendingAlertText">1 approval waiting</span>
+            <button type="button" class="link-btn" id="pendingJump">show</button>
+          </div>
+          <div class="composer__box">
+            <textarea id="input" rows="1" placeholder="Ask ArcBot to do something…"
+              autocomplete="off" spellcheck="false"></textarea>
+            <div class="composer__actions">
+              <span class="composer__hint" id="composerHint">Enter to send · Shift+Enter for a new line</span>
+              <button class="send" id="sendBtn" type="button" title="Send">
+                <span class="send__glyph" aria-hidden="true">→</span>
+              </button>
+              <button class="send send--stop" id="stopBtn" type="button" title="Stop" hidden>
+                <span class="send__glyph" aria-hidden="true">■</span>
+              </button>
+            </div>
+          </div>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ onboarding ═══════════════════════════ -->
+  <div class="setup" id="setup" hidden>
+    <div class="setup__stage">
+      <header class="setup__head">
+        <svg class="mark mark--lg" viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="18" r="1.9" fill="currentColor"/></svg>
+        <div>
+          <h1 class="setup__title">Set up ArcBot</h1>
+          <p class="setup__sub">Four choices. You can change any of them later.</p>
+        </div>
+      </header>
+
+      <ol class="steps" id="stepsNav"></ol>
+
+      <!-- step 1: model -->
+      <section class="step" data-step="0">
+        <h2 class="step__title">Choose a brain</h2>
+        <p class="step__lead">
+          ArcBot does not ship a model. Point it at one you already have access to —
+          a local one, an API key, or your Claude subscription.
+        </p>
+        <div class="providers" id="providerGrid"></div>
+
+        <div class="provider-detail" id="providerDetail" hidden>
+          <div class="provider-detail__auth" id="authState"></div>
+          <ol class="setup-steps" id="setupSteps"></ol>
+
+          <label class="field" id="keyField" hidden>
+            <span class="field__label">API key</span>
+            <input type="password" id="keyInput" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+            <span class="field__note">Stored on this machine only, in a file only you can read.</span>
+          </label>
+
+          <label class="field" id="urlField" hidden>
+            <span class="field__label">Server URL</span>
+            <input type="text" id="urlInput" placeholder="http://localhost:1234/v1" autocomplete="off"
+              spellcheck="false" />
+          </label>
+
+          <label class="field">
+            <span class="field__label">
+              Model
+              <button type="button" class="link-btn" id="refreshModels">refresh</button>
+            </span>
+            <input type="text" id="modelInput" list="modelOptions" placeholder="pick or type a model name"
+              autocomplete="off" spellcheck="false" />
+            <datalist id="modelOptions"></datalist>
+            <span class="field__note" id="modelNote"></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- step 2: workspace -->
+      <section class="step" data-step="1" hidden>
+        <h2 class="step__title">Pick a workspace</h2>
+        <p class="step__lead">
+          This folder is the agent's world. File tools cannot read or write outside it,
+          and commands start here. Pick a project folder, or make a scratch one.
+        </p>
+        <label class="field">
+          <span class="field__label">Folder</span>
+          <input type="text" id="workspaceInput" spellcheck="false" autocomplete="off" />
+          <span class="field__note">Created if it does not exist yet.</span>
+        </label>
+        <div class="callout">
+          <strong>What lives here</strong>
+          A hidden <code>.arcbot</code> folder holds this workspace's memory, plan and
+          chat transcripts. Nothing leaves your machine.
+        </div>
+      </section>
+
+      <!-- step 3: trust -->
+      <section class="step" data-step="2" hidden>
+        <h2 class="step__title">Set the trust level</h2>
+        <p class="step__lead">
+          How much should ArcBot do without asking? Every command is graded by risk;
+          this decides where the line for approval sits.
+        </p>
+        <div class="modes" id="modeList"></div>
+      </section>
+
+      <!-- step 4: toolsets -->
+      <section class="step" data-step="3" hidden>
+        <h2 class="step__title">Turn on what you need</h2>
+        <p class="step__lead">
+          Only what you enable gets loaded. If a task later needs something switched
+          off, ArcBot asks you to enable it with one click instead of failing.
+        </p>
+        <div class="toolset-cards" id="toolsetPicker"></div>
+      </section>
+
+      <footer class="setup__foot">
+        <button class="btn btn--ghost" id="backBtn" type="button" hidden>Back</button>
+        <div class="setup__foot-spacer"></div>
+        <span class="setup__error" id="setupError"></span>
+        <button class="btn btn--primary" id="nextBtn" type="button">Continue</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════ settings ═══════════════════════════ -->
+  <div class="sheet" id="settings" hidden>
+    <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="Settings">
+      <header class="sheet__head">
+        <h2>Settings</h2>
+        <nav class="tabs" id="settingsTabs" role="tablist"></nav>
+        <button class="icon-btn" id="settingsClose" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="sheet__body" id="settingsBody"></div>
+      <footer class="sheet__foot">
+        <span class="sheet__note" id="settingsNote"></span>
+        <button class="btn btn--ghost" id="rerunSetup" type="button">Run setup again</button>
+        <button class="btn btn--primary" id="settingsSave" type="button">Save</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script>window.ARCBOT_TOKEN = "__ARCBOT_TOKEN__";</script>
+  <script src="/static/marked.min.js"></script>
+  <script src="/static/highlight.min.js"></script>
+  <script src="/static/xterm.min.js"></script>
+  <script src="/static/xterm-addon-fit.min.js"></script>
+  <script src="/static/arcbot.js"></script>
+</body>
+
+</html>
