@@ -21,6 +21,28 @@ log = get_logger("asks")
 DEFAULT_TIMEOUT = 900.0
 
 
+def spoken_form(kind: str, payload: dict[str, Any]) -> str:
+    """Turn a question into something worth hearing.
+
+    Deliberately short: the screen already shows the command, the diff and the
+    risk badge.  Spoken aloud, all that matters is what is being asked for, so
+    the listener knows to look.
+    """
+    from .events import Ask
+
+    if kind == Ask.INPUT:
+        return str(payload.get("question") or "")
+    if kind == Ask.COMMAND:
+        return f"Can I run {payload.get('command') or 'a command'}?"
+    if kind == Ask.TOOL:
+        return f"Can I {payload.get('title') or payload.get('tool') or 'do that'}?"
+    if kind == Ask.TOOLSET:
+        return f"I need the {payload.get('name') or 'a'} capability. Turn it on?"
+    if kind == Ask.PATH:
+        return f"Can I use {payload.get('path') or 'a folder outside the workspace'}?"
+    return "I need your approval to continue."
+
+
 @dataclass
 class AskResult:
     decision: str                     # "allow" | "always" | "deny" | "never" | "answer"
@@ -43,6 +65,10 @@ class AskBroker:
     def __init__(self, bus: EventBus) -> None:
         self.bus = bus
         self._pending: dict[str, asyncio.Future] = {}
+        #: Reads a question aloud.  Set while voice mode is on — without it, a
+        #: hands-free user would sit in silence waiting for approval they never
+        #: heard was needed.
+        self.narrate: Any = None
 
     @property
     def pending_ids(self) -> list[str]:
@@ -63,6 +89,11 @@ class AskBroker:
         self._pending[ask_id] = future
 
         await self.bus.emit(E.ASK, {"askId": ask_id, "kind": kind, **payload})
+        if self.narrate is not None:
+            try:
+                await self.narrate(spoken_form(kind, payload))
+            except Exception as exc:      # never let speech block a question
+                log.debug("Could not speak the question: %s", exc)
         try:
             if timeout and timeout > 0:
                 result = await asyncio.wait_for(future, timeout=timeout)

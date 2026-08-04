@@ -131,6 +131,38 @@ class LimitSettings:
 
 
 @dataclass
+class VoiceSettings:
+    """Hands-free mode.  Off until the user asks for it, because turning it on
+    means downloading models."""
+
+    enabled: bool = False
+    #: "local" keeps everything on this machine; "cloud" uses an API.
+    stt_engine: str = "local"
+    tts_engine: str = "local"
+    stt_model: str = "moonshine-tiny-en"
+    tts_model: str = "piper-amy"
+    #: Cloud provider ids from ``voice.catalog`` and their model/voice choices.
+    stt_cloud: str = "openai"
+    tts_cloud: str = "openai"
+    cloud_stt_model: str = ""
+    cloud_tts_model: str = ""
+    cloud_tts_voice: str = "alloy"
+    #: Local speaker index for multi-voice models.
+    voice: int = 0
+    speed: float = 1.0
+    #: Silence, in milliseconds, that marks the end of what you were saying.
+    silence_ms: int = 600
+    #: Stop speaking the moment the user starts.
+    barge_in: bool = True
+    #: Show what was heard and what is being said.
+    captions: bool = True
+    #: Speak approval requests and questions aloud.
+    speak_prompts: bool = True
+    #: Threads each model may use.  Two keeps a laptop responsive.
+    threads: int = 2
+
+
+@dataclass
 class UISettings:
     theme: str = "dark"
     accent: str = "ember"
@@ -159,6 +191,7 @@ class Settings:
     permissions: PermissionSettings = field(default_factory=PermissionSettings)
     limits: LimitSettings = field(default_factory=LimitSettings)
     ui: UISettings = field(default_factory=UISettings)
+    voice: VoiceSettings = field(default_factory=VoiceSettings)
     server: ServerSettings = field(default_factory=ServerSettings)
     #: External MCP servers, ``{name: {command, args, env, enabled}}``.
     mcp_servers: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -184,6 +217,7 @@ _NESTED: dict[str, Any] = {
     "permissions": PermissionSettings,
     "limits": LimitSettings,
     "ui": UISettings,
+    "voice": VoiceSettings,
     "server": ServerSettings,
 }
 

@@ -15,6 +15,9 @@ import pytest
 _CONFIG = Path(tempfile.mkdtemp(prefix="arcbot-test-config-"))
 os.environ.setdefault("ARCBOT_CONFIG_DIR", str(_CONFIG))
 os.environ.setdefault("ARCBOT_DATA_DIR", str(_CONFIG))
+# Models normally live beside the app, which for a source checkout is this
+# repository — a test run has no business creating folders there.
+os.environ.setdefault("ARCBOT_MODELS_DIR", str(_CONFIG / "voice-models"))
 
 
 @pytest.fixture

@@ -9,6 +9,7 @@ stops a random web page you have open from driving your agent.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import secrets
 import shlex
@@ -53,6 +54,16 @@ class Runtime:
         self.agent = Agent(store, self.bus)
         self.clients: set[WebSocket] = set()
         self.started_at = time.time()
+        self._voice: Any = None
+
+    @property
+    def voice(self):
+        """Built on first use so importing the app never pulls in numpy."""
+        if self._voice is None:
+            from ..voice.controller import VoiceController
+
+            self._voice = VoiceController(self.store, self.bus, self.agent)
+        return self._voice
 
     @property
     def settings(self) -> Settings:
@@ -74,6 +85,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # A half-finished download writes to a scratch file and is swept up on
+        # the next run, so abandoning it here costs nothing but the bytes.
+        await RUNTIME.voice.cancel_download()
         await RUNTIME.agent.shutdown()
 
 
@@ -241,6 +255,183 @@ async def test_connection() -> dict[str, Any]:
         return {"ok": False, "detail": "No provider is configured."}
     ok, detail = await provider.health()
     return {"ok": ok, "detail": detail}
+
+
+# --------------------------------------------------------------------------- #
+# Voice mode
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/api/voice", dependencies=[Auth])
+async def voice_state() -> dict[str, Any]:
+    from ..voice.catalog import catalog_payload as voice_catalog
+    from ..voice.catalog import required_download_mb
+
+    voice = RUNTIME.settings.voice
+    return {
+        **RUNTIME.voice.status(),
+        "catalog": voice_catalog(),
+        "downloadMb": required_download_mb(voice.stt_model, voice.tts_model),
+    }
+
+
+@app.post("/api/voice/settings", dependencies=[Auth])
+async def voice_settings(payload: dict[str, Any]) -> dict[str, Any]:
+    from ..voice.catalog import STT_MODELS, TTS_MODELS
+
+    voice = RUNTIME.settings.voice
+    mapping = {
+        "sttEngine": ("stt_engine", ("local", "cloud")),
+        "ttsEngine": ("tts_engine", ("local", "cloud")),
+        "sttModel": ("stt_model", tuple(STT_MODELS)),
+        "ttsModel": ("tts_model", tuple(TTS_MODELS)),
+    }
+    for key, (attribute, allowed) in mapping.items():
+        if key in payload:
+            value = str(payload[key])
+            if value not in allowed:
+                raise HTTPException(400, f"{value!r} is not a valid {key}.")
+            setattr(voice, attribute, value)
+
+    for key, attribute in (("cloudTtsVoice", "cloud_tts_voice"),
+                           ("cloudSttModel", "cloud_stt_model"),
+                           ("cloudTtsModel", "cloud_tts_model")):
+        if key in payload:
+            setattr(voice, attribute, str(payload[key])[:80])
+    for key, attribute in (("bargeIn", "barge_in"), ("captions", "captions"),
+                           ("speakPrompts", "speak_prompts"), ("enabled", "enabled")):
+        if key in payload:
+            setattr(voice, attribute, bool(payload[key]))
+    if "voice" in payload:
+        voice.voice = max(0, min(int(payload["voice"]), 200))
+    if "speed" in payload:
+        voice.speed = min(max(float(payload["speed"]), 0.5), 2.0)
+    if "silenceMs" in payload:
+        voice.silence_ms = min(max(int(payload["silenceMs"]), 200), 3000)
+    if "threads" in payload:
+        voice.threads = min(max(int(payload["threads"]), 1), 8)
+
+    RUNTIME.store.save(RUNTIME.settings)
+    # Settings only take effect on the next session, so restart a live one.
+    if RUNTIME.voice.active:
+        await RUNTIME.voice.stop()
+        await RUNTIME.voice.start()
+    return await voice_state()
+
+
+@app.post("/api/voice/download", dependencies=[Auth])
+async def voice_download(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Fetch the chosen models.
+
+    Backgrounded by default: hundreds of megabytes is not something to hold a
+    setup wizard open for.  Progress arrives over the event stream and the job
+    survives a page reload, so the user is free to start working immediately.
+    """
+    if (payload or {}).get("wait"):
+        ok, message = await RUNTIME.voice.ensure_models()
+        return {"ok": ok, "message": message, **RUNTIME.voice.status()}
+
+    job = await RUNTIME.voice.start_download(RUNTIME.voice.wanted_models())
+    return {
+        "ok": job["ok"],
+        "message": job["message"] or "Downloading in the background.",
+        **RUNTIME.voice.status(),
+    }
+
+
+@app.post("/api/voice/download/seen", dependencies=[Auth])
+async def voice_download_seen() -> dict[str, Any]:
+    """Dismiss a finished download so its notice stops following the user."""
+    RUNTIME.voice.acknowledge_download()
+    return RUNTIME.voice.status()
+
+
+@app.delete("/api/voice/models/{kind}/{model_id}", dependencies=[Auth])
+async def voice_remove_model(kind: str, model_id: str) -> dict[str, Any]:
+    from ..voice.models import remove, resolve
+
+    model = resolve(kind, model_id)
+    if model is None:
+        raise HTTPException(404, "No such voice model.")
+    remove(model)
+    return RUNTIME.voice.status()
+
+
+@app.post("/api/voice/preview", dependencies=[Auth])
+async def voice_preview(payload: dict[str, Any]) -> dict[str, Any]:
+    """Speak a sample line so the user can hear a voice before choosing it.
+
+    Never downloads: if the model is missing it says so instead, so a curious
+    tap cannot quietly cost a hundred megabytes.
+    """
+    from ..voice.engines import VoiceUnavailable
+
+    text = str(payload.get("text") or "Hello — this is how I sound.")[:300]
+    model_id = str(payload.get("model") or "")
+    voice = max(0, min(int(payload.get("voice") or 0), 500))
+    try:
+        return await RUNTIME.voice.preview(text, model_id, voice)
+    except VoiceUnavailable as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(400, f"Could not synthesise a preview: {exc}") from exc
+
+
+@app.get("/api/voice/voices", dependencies=[Auth])
+async def voice_voices(model: str = "") -> dict[str, Any]:
+    """How many speakers a model has, discovered from the model itself."""
+    return await RUNTIME.voice.describe_voices(model)
+
+
+@app.post("/api/voice/install", dependencies=[Auth])
+async def voice_install(payload: dict[str, Any]) -> dict[str, Any]:
+    """Download one named model, and only that one, in the background."""
+    from ..voice.models import resolve
+
+    kind = str(payload.get("kind") or "tts")
+    model_id = str(payload.get("model") or "")
+    if kind not in ("stt", "tts", "vad"):
+        raise HTTPException(400, "kind must be stt, tts or vad.")
+
+    if payload.get("wait"):
+        ok, message = await RUNTIME.voice.install_one(kind, model_id)
+        return {"ok": ok, "message": message, **RUNTIME.voice.status()}
+
+    model = resolve(kind, model_id)
+    if model is None:
+        raise HTTPException(404, "No such voice model.")
+    job = await RUNTIME.voice.start_download([model])
+    if job["running"]:
+        message = f"Downloading {model.name} ({model.size_mb} MB) in the background."
+    else:
+        message = job["message"] or f"{model.name} is ready."
+    return {"ok": job["ok"], "message": message, **RUNTIME.voice.status()}
+
+
+@app.post("/api/voice/use", dependencies=[Auth])
+async def voice_use(payload: dict[str, Any]) -> dict[str, Any]:
+    """Switch the live session's voice without leaving voice mode."""
+    from ..voice.catalog import TTS_MODELS
+    from ..voice.models import is_installed
+
+    settings = RUNTIME.settings.voice
+    model_id = str(payload.get("model") or settings.tts_model)
+    model = TTS_MODELS.get(model_id)
+    if model is None:
+        raise HTTPException(404, "No such voice model.")
+    if not is_installed(model):
+        raise HTTPException(400, f"{model.name} is not downloaded yet.")
+
+    settings.tts_model = model_id
+    settings.voice = max(0, min(int(payload.get("voice") or 0), 500))
+    if "speed" in payload:
+        settings.speed = min(max(float(payload["speed"]), 0.5), 2.0)
+    RUNTIME.store.save(RUNTIME.settings)
+
+    # Swap the engine in place so a live conversation keeps its state.
+    if RUNTIME.voice.active:
+        await RUNTIME.voice.swap_voice()
+    return RUNTIME.voice.status()
 
 
 # --------------------------------------------------------------------------- #
@@ -563,8 +754,20 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=""
             "ready": RUNTIME.agent.provider is not None,
         })
         while True:
-            message = await websocket.receive_json()
-            await _handle_client_message(message)
+            frame = await websocket.receive()
+            if frame.get("type") == "websocket.disconnect":
+                break
+            payload = frame.get("bytes")
+            if payload is not None:
+                # Microphone audio: a 4-byte little-endian sample rate header
+                # followed by 16-bit PCM, so one frame carries its own format.
+                if len(payload) > 4:
+                    rate = int.from_bytes(payload[:4], "little")
+                    await RUNTIME.voice.feed(payload[4:], rate or 48_000)
+                continue
+            text = frame.get("text")
+            if text:
+                await _handle_client_message(json.loads(text))
     except WebSocketDisconnect:
         pass
     except Exception as exc:
@@ -606,6 +809,17 @@ async def _handle_client_message(message: dict[str, Any]) -> None:
                 await RUNTIME.bus.emit(E.NOTICE, {"level": "error", "text": error})
         else:
             await agent.disable_toolset(toolset_id)
+    elif kind == "voice.start":
+        ok, message = await RUNTIME.voice.start()
+        await RUNTIME.bus.emit(
+            E.NOTICE, {"level": "success" if ok else "error", "text": message}
+        )
+        if not ok:
+            await RUNTIME.bus.emit(E.VOICE_STATE, {"state": "idle", "detail": message})
+    elif kind == "voice.stop":
+        await RUNTIME.voice.stop()
+    elif kind == "voice.interrupt":
+        await RUNTIME.voice.interrupt()
     elif kind == "ping":
         await RUNTIME.bus.emit("pong", {})
 

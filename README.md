@@ -7,7 +7,7 @@
 Bring your own model. Choose exactly which powers it gets.
 Watch every command, file change and tool call as it happens.
 
-[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Features](#features) · [Security](#security)
+[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Features](#features) · [Voice](#voice-mode) · [Security](#security)
 
 </div>
 
@@ -47,7 +47,7 @@ uv run arcbot
 
 ## Quick start
 
-Setup is four choices, and you can change any of them later.
+Setup is a handful of choices, and you can change any of them later.
 
 **1. Pick a model.** Paste an API key, point ArcBot at a local server, or use a
 Claude subscription you already have. The wizard shows what each one needs and
@@ -59,6 +59,9 @@ tells you when it can see your credentials.
 before writing files or running commands.
 
 **4. Pick your capabilities.** Only what you enable gets loaded.
+
+**5. Voice mode, or not.** Optional. Say no and nothing is downloaded; say yes
+and the models arrive in the background while you work.
 
 Then ask it for something:
 
@@ -120,6 +123,59 @@ or paste a command or URL.
 **Build your own tools.** Describe one in a sentence and your model writes it.
 You see the code, the arguments and what it can reach before anything is saved.
 
+**Hands-free.** [Voice mode](#voice-mode) runs speech recognition and synthesis
+locally in about 52 MB, with barge-in and live captions.
+
+---
+
+## Voice mode
+
+Talk to ArcBot instead of typing. It does everything it does in text — same
+tools, same permissions, same trace — you just do not have to touch anything.
+
+Press the microphone beside Send, or `Ctrl/Cmd + Shift + V`. The screen becomes a particle
+field that reacts to whoever is talking: cool and pulling one way while you
+speak, warm the other way while ArcBot answers. Captions run underneath if you
+want to read along.
+
+**It runs on your machine.** The default pair is about **52 MB** and needs no
+GPU — on one laptop core it transcribes at roughly 100x real time and starts
+speaking in under 200 ms.
+
+| | Model | Size |
+|---|---|---|
+| Listening | Moonshine Tiny | 30 MB |
+| Speaking | Piper | 21 MB |
+| Turn detection | Silero VAD | 0.6 MB |
+
+Other choices are one click away: Moonshine Base or Whisper for accuracy,
+SenseVoice for Chinese, Japanese, Korean or Cantonese, Kokoro (132 MB) for the
+most natural voice, KittenTTS for the smallest. Or switch to OpenAI or Groq if
+you would rather not download anything — your audio then leaves your machine.
+
+**Nothing is downloaded unless you ask.** Voice is an optional step in setup —
+skip it and no model is fetched. Pick a model and only that one is downloaded;
+the rest stay listed with their size until you want them.
+
+**Downloads never make you wait.** They run in the background with live
+progress, so setup finishes immediately and you can start working while the
+models arrive. Close the tab and come back — the download is still going. Models
+land in `models/voice/` beside the app when you run from source, so they are
+easy to find and easy to delete; Settings → Voice always shows the exact path.
+
+**Try voices without leaving the conversation.** *Change voice* in voice mode
+lists every model with its size, and every speaker as a chip. Tap one to hear
+it, tap again to switch. Kokoro's 53 voices and KittenTTS's 8 are all one tap
+away, and a preview never triggers a download.
+
+It interrupts properly: start talking while ArcBot is speaking and it stops mid
+sentence and listens. Replies are spoken sentence by sentence as they are
+written, so you are not waiting for the whole answer before hearing any of it.
+
+```bash
+pip install "arcbot[voice]"     # included in arcbot[all]
+```
+
 ---
 
 ## Security
@@ -156,8 +212,14 @@ arcbot ask "run the tests"   # one-shot, no UI
 
 ```
 ~/.config/arcbot/            settings, credentials (0600), your own tools
+~/.local/share/arcbot/       logs
+./models/voice/              voice models, beside the app
 <workspace>/.arcbot/         memory, plan and chat transcripts
 ```
+
+Installed from PyPI rather than a checkout? Voice models go to
+`~/.local/share/arcbot/voice-models` instead. Set `ARCBOT_MODELS_DIR` to put
+them anywhere you like.
 
 Drop an `AGENTS.md` or `CLAUDE.md` in your workspace and ArcBot reads it as
 project conventions.
@@ -174,6 +236,7 @@ project conventions.
 | A capability says "missing" | It needs an optional package: `pip install "arcbot[all]"` |
 | An MCP server will not connect | The reason is shown beside it; usually `uvx` or `npx` is not on your PATH |
 | Port already in use | ArcBot picks the next free port; pass `--port` to choose |
+| Voice mode will not start | `pip install "arcbot[voice]"`. If it says native libraries are missing, the install was interrupted: `pip install --force-reinstall sherpa-onnx` |
 
 ---
 
@@ -181,7 +244,7 @@ project conventions.
 
 ```bash
 uv sync --extra all --extra dev
-uv run pytest                # 232 tests
+uv run pytest                # 309 tests
 uv run ruff check arcbot
 ```
 

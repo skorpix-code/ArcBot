@@ -32,7 +32,10 @@ dependencies = [
 [project.optional-dependencies]
 web = ["ddgs>=9.0"]
 google = ["google-genai>=1.0"]
-all = ["ddgs>=9.0", "google-genai>=1.0"]
+# One wheel covers recognition, synthesis and voice-activity detection, and it
+# does not pull in PyTorch — the whole voice stack adds about 25 MB installed.
+voice = ["sherpa-onnx>=1.13", "numpy>=1.24"]
+all = ["ddgs>=9.0", "google-genai>=1.0", "sherpa-onnx>=1.13", "numpy>=1.24"]
 dev = ["ruff>=0.6", "pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [project.scripts]

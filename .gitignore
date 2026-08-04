@@ -14,6 +14,7 @@ venv/
 .env
 credentials.json
 .arcbot/
+models/
 
 # Editors and OS
 .idea/

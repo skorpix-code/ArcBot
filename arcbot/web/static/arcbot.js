@@ -603,6 +603,14 @@ function handleEvent(event) {
     case "config": state.settings = event.settings; applySettings(); break;
 
     case "notice": toast(event.text, event.level || "info"); break;
+    case "voice.ready":
+    case "voice.state":
+    case "voice.transcript":
+    case "voice.speak":
+    case "voice.stop":
+    case "voice.barge":
+    case "voice.download":
+      handleVoiceEvent(event); break;
     case "error": onError(event); break;
     case "shutdown": onShutdown(event); break;
     case "open.settings": openSettings(event.panel || "tools"); break;
@@ -896,6 +904,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model", render: renderModelTab },
   { id: "trust", label: "Trust", render: renderTrustTab },
   { id: "tools", label: "Tools", render: renderToolsTab },
+  { id: "voice", label: "Voice", render: renderVoiceTab },
   { id: "mcp", label: "Connections", render: renderConnectionsTab },
 ];
 let activeTab = "model";
@@ -915,6 +924,7 @@ function buildSettings() {
   const body = $("settingsBody");
   body.innerHTML = "";
   const showSave = activeTab === "model" || activeTab === "trust";
+  state.voice = state.voice || null;
   $("settingsSave").hidden = !showSave;
   $("settingsNote").textContent = "";
   (SETTINGS_TABS.find((t) => t.id === activeTab) || SETTINGS_TABS[0]).render(body);
@@ -1112,6 +1122,262 @@ async function renderConnectionsTab(body) {
   }));
   custom.append(addRow);
   body.append(custom);
+}
+
+/* ── voice ─────────────────────────────────────────────────────────── */
+
+async function renderVoiceTab(body) {
+  const intro = group("Voice mode");
+  intro.append(el("p", "field__note",
+    "Talk to ArcBot instead of typing. It can do everything it does in text — same tools, "
+    + "same permissions, same trace. Models run on your machine unless you choose a cloud service, "
+    + "and nothing is downloaded until you turn it on."));
+  body.append(intro);
+
+  const box = el("div", "group");
+  body.append(box);
+  box.append(el("p", "empty-note", "Loading…"));
+
+  let data;
+  try {
+    data = await api("/api/voice");
+  } catch (error) {
+    box.innerHTML = "";
+    box.append(el("p", "empty-note", String(error.message)));
+    return;
+  }
+  state.voice = data;
+  box.innerHTML = "";
+
+  if (!data.available) {
+    const warn = el("div", "builder__banner");
+    warn.append(el("span", null,
+      'The local speech engine is not installed. Run: pip install "arcbot[voice]" — '
+      + "or choose a cloud service below."));
+    box.append(warn);
+  }
+
+  const save = async (patch) => {
+    try {
+      state.voice = await post("/api/voice/settings", patch);
+      buildSettings();
+    } catch (error) { toast(String(error.message), "error"); }
+  };
+
+  const settings = data.settings;
+  const installed = data.installed;
+
+  // Where the speech runs.
+  const where = group("Where it runs");
+  const engineRow = el("div", "ask__actions");
+  [["local", "On this machine"], ["cloud", "A cloud service"]].forEach(([value, label]) => {
+    const button = el("button", `btn btn--sm${settings.sttEngine === value ? " btn--primary" : ""}`, label);
+    button.type = "button";
+    button.addEventListener("click", () => save({ sttEngine: value, ttsEngine: value }));
+    engineRow.append(button);
+  });
+  where.append(engineRow);
+  where.append(el("p", "field__note", settings.sttEngine === "local"
+    ? `Everything stays here. ${data.downloadMb} MB of models, about ${data.diskMb} MB currently on disk.`
+    : "Your audio and ArcBot's replies are sent to the service you pick."));
+  if (settings.sttEngine === "local" && data.modelsPath) {
+    const note = el("p", "field__note", "Stored in ");
+    note.append(el("code", null, data.modelsPath));
+    note.append(document.createTextNode(" — delete the folder to reclaim the space."));
+    where.append(note);
+  }
+  body.append(where);
+
+  if (settings.sttEngine === "local") {
+    body.append(modelPicker("Listening", data.catalog.stt, settings.sttModel,
+      installed.stt, (id) => save({ sttModel: id }), "stt"));
+    body.append(modelPicker("Speaking", data.catalog.tts, settings.ttsModel,
+      installed.tts, (id) => save({ ttsModel: id }), "tts"));
+
+    const chosen = data.catalog.tts.find((m) => m.id === settings.ttsModel);
+    if (chosen && chosen.voices > 1) {
+      const voices = group("Voice");
+      voices.append(field(`Speaker (0 – ${chosen.voices - 1})`,
+        numberInput(settings.voice, (value) => save({ voice: value }))));
+      body.append(voices);
+    }
+  } else {
+    const cloud = group("Cloud service");
+    const spec = data.catalog.cloudTts.openai;
+    cloud.append(field("Voice", selectInput(
+      spec.voices.map((v) => [v, v]), settings.cloudTtsVoice,
+      (value) => save({ cloudTtsVoice: value }))));
+    cloud.append(field("OPENAI_API_KEY", secretInput("OPENAI_API_KEY")));
+    cloud.append(el("p", "field__note", spec.note));
+    body.append(cloud);
+  }
+
+  // Behaviour.
+  const tuning = group("How it listens");
+  tuning.append(field("Pause before it answers (ms)",
+    numberInput(settings.silenceMs, (value) => save({ silenceMs: value }))));
+  tuning.append(el("p", "field__note",
+    "How long a silence means you have finished. Lower feels snappier; higher lets you think mid-sentence."));
+  tuning.append(field("Speaking speed",
+    numberInput(settings.speed, (value) => save({ speed: value }))));
+
+  const toggles = el("div", "ask__actions");
+  [["bargeIn", "Interrupt by talking", settings.bargeIn],
+   ["captions", "Show captions", settings.captions],
+   ["speakPrompts", "Read prompts aloud", settings.speakPrompts]].forEach(([key, label, on]) => {
+    const button = el("button", `btn btn--sm${on ? " btn--primary" : ""}`, label);
+    button.type = "button";
+    button.addEventListener("click", () => save({ [key]: !on }));
+    toggles.append(button);
+  });
+  tuning.append(toggles);
+  body.append(tuning);
+
+  // Try it.
+  const actions = group("Try it");
+  const row = el("div", "ask__actions");
+  row.append(button("Hear this voice", "btn--primary", async () => {
+    try {
+      const clip = await post("/api/voice/preview", {});
+      previewAudio(clip);
+    } catch (error) { toast(String(error.message), "error"); }
+  }));
+  if (settings.sttEngine === "local") {
+    row.append(button(`Download models (${data.downloadMb} MB)`, "", async () => {
+      try {
+        const result = await post("/api/voice/download", {});
+        renderVoiceDock(result.download);
+        toast(result.message, result.ok ? "info" : "error", result.ok ? 4000 : 12000);
+      } catch (error) { toast(String(error.message), "error", 12000); }
+    }));
+  }
+  row.append(button("Start voice mode", "", () => {
+    $("settings").hidden = true;
+    voiceStart();
+  }));
+  actions.append(row);
+  body.append(actions);
+}
+
+function modelPicker(title, models, selected, installed, onPick) {
+  const box = group(title);
+  box.append(modelChoiceGrid(models, { selected, installed, onPick }));
+  return box;
+}
+
+/**
+ * A grid of model cards where exactly one is chosen.
+ *
+ * Shared by setup and settings so the chosen model looks chosen in both — the
+ * card is a radio button in everything but name, and it says up front what
+ * picking it will cost.
+ */
+function modelChoiceGrid(models, { selected, installed, onPick }) {
+  const grid = el("div", "preset-grid");
+  models.forEach((model) => {
+    const ready = installed.includes(model.id);
+    const card = el("button", "preset");
+    card.type = "button";
+    card.setAttribute("aria-pressed", String(model.id === selected));
+
+    const top = el("div", "preset__top");
+    top.append(el("span", "preset__name", model.name));
+    const badge = el("span", "cap-badge", ready ? "ready" : `${model.sizeMb} MB`);
+    badge.dataset.cap = ready ? "read" : "write";
+    top.append(badge);
+    card.append(top);
+
+    card.append(el("span", "preset__sum", model.note));
+
+    const foot = el("div", "preset__foot");
+    foot.append(el("span", "preset__need", model.language));
+    if (model.default) foot.append(el("span", "preset__tag", "recommended"));
+    if (model.voices > 1) foot.append(el("span", "preset__tag", `${model.voices} voices`));
+    card.append(foot);
+
+    card.addEventListener("click", () => onPick(model.id));
+    grid.append(card);
+  });
+  return grid;
+}
+
+/* ── background model downloads ────────────────────────────────────── */
+
+/**
+ * A download the user can walk away from.
+ *
+ * The job itself lives on the server, so this only ever renders what it is
+ * told — reloading the page picks the same download back up mid-flight.
+ */
+function renderVoiceDock(job) {
+  const dock = $("voiceDock");
+  if (!dock) return;
+  if (!job || job.seen || (job.done && !job.items.length)) {
+    dock.hidden = true;
+    return;
+  }
+
+  const failed = job.done && !job.ok;
+  dock.hidden = false;
+  dock.dataset.state = job.done ? (failed ? "failed" : "ready") : "running";
+  $("voiceDockTitle").textContent = job.done
+    ? (failed ? "Some voice models did not arrive" : "Voice mode is ready")
+    : "Downloading voice models";
+  $("voiceDockSub").textContent = job.done
+    ? job.message
+    : `${Math.round(job.progress * 100)}% of ${job.totalMb} MB`;
+
+  const items = $("voiceDockItems");
+  items.innerHTML = "";
+  job.items.forEach((item) => {
+    const row = el("div", "dock__item");
+    row.dataset.state = item.state;
+    const head = el("div", "dock__item-head");
+    head.append(el("span", "dock__item-name", item.name));
+    head.append(el("span", "dock__item-meta",
+      item.state === "failed" ? "failed"
+        : item.state === "ready" ? "done"
+          : `${Math.round(item.progress * 100)}%`));
+    row.append(head);
+    const bar = el("div", "dock__bar");
+    const fill = el("i");
+    fill.style.width = `${Math.round(item.progress * 100)}%`;
+    bar.append(fill);
+    row.append(bar);
+    if (item.state === "failed" && item.detail) {
+      row.append(el("span", "dock__item-error", item.detail));
+    }
+    items.append(row);
+  });
+
+  $("voiceDockFoot").hidden = !(job.done && job.ok);
+}
+
+/** Put the notice away — by dismissing it, or by going and using voice mode. */
+async function dismissVoiceDock() {
+  const dock = $("voiceDock");
+  if (!dock || dock.hidden) return;
+  dock.hidden = true;
+  try { await post("/api/voice/download/seen", {}); } catch { /* nothing to lose */ }
+}
+
+$("voiceDockClose").addEventListener("click", dismissVoiceDock);
+$("voiceDockStart").addEventListener("click", () => {
+  dismissVoiceDock();
+  voiceStart();
+});
+
+/** Play a preview clip without needing the full voice-mode audio graph. */
+function previewAudio(clip) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const buffer = ctx.createBuffer(1, clip.samples.length, clip.sampleRate);
+  const channel = buffer.getChannelData(0);
+  for (let i = 0; i < clip.samples.length; i++) channel[i] = clip.samples[i] / 32768;
+  const node = ctx.createBufferSource();
+  node.buffer = buffer;
+  node.connect(ctx.destination);
+  node.onended = () => ctx.close();
+  node.start();
 }
 
 /* ── tools & the builder ───────────────────────────────────────────── */
@@ -1460,7 +1726,7 @@ const setup = {
   auth: null,
 };
 
-const STEP_LABELS = ["Model", "Workspace", "Trust", "Capabilities"];
+const STEP_LABELS = ["Model", "Workspace", "Trust", "Capabilities", "Voice"];
 
 function startOnboarding() {
   setup.step = 0;
@@ -1470,9 +1736,11 @@ function startOnboarding() {
   }
   $("app").hidden = true;
   $("setup").hidden = false;
+  setup.voice = { enabled: false, stt: "", tts: "" };
   renderProviders();
   renderModes();
   renderToolsetPicker();
+  renderVoiceStep();
   $("workspaceInput").value = setup.draft.workspace || "";
   showStep(0);
 }
@@ -1593,6 +1861,99 @@ function renderModes() {
   });
 }
 
+/* Voice is opt-in and opt-in only: until "Yes" is chosen the models list is not
+   even shown, and nothing is fetched. */
+async function renderVoiceStep() {
+  const choice = $("voiceChoice");
+  choice.innerHTML = "";
+  [
+    { id: "yes", name: "Yes, set up voice mode",
+      summary: "Talk instead of typing, hands-free.",
+      detail: "Downloads speech models once. Everything stays on this machine." },
+    { id: "no", name: "Not now", summary: "Type as usual. Nothing is downloaded.",
+      detail: "You can turn voice mode on later in Settings." },
+  ].forEach((option) => {
+    const chosen = setup.voice.enabled === (option.id === "yes");
+    const card = el("button", "mode mode--choice");
+    card.type = "button";
+    card.setAttribute("aria-pressed", String(chosen));
+    const text = el("div");
+    text.append(el("div", "mode__name", option.name));
+    text.append(el("div", "mode__summary", option.summary));
+    text.append(el("div", "mode__detail", option.detail));
+    card.append(el("span", "mode__check"), text);
+    card.addEventListener("click", () => {
+      setup.voice.enabled = option.id === "yes";
+      renderVoiceStep();
+    });
+    choice.append(card);
+  });
+
+  const box = $("voiceSetupModels");
+  box.hidden = !setup.voice.enabled;
+  if (!setup.voice.enabled) return;
+
+  box.innerHTML = "";
+  let data;
+  try {
+    data = await api("/api/voice");
+  } catch (error) {
+    box.append(el("p", "field__note", String(error.message)));
+    return;
+  }
+  if (!data.available) {
+    const warn = el("div", "builder__banner");
+    warn.append(el("span", null,
+      'The speech engine is not installed. Run: pip install "arcbot[voice]" and restart, '
+      + "then turn voice mode on in Settings."));
+    box.append(warn);
+    return;
+  }
+
+  setup.voice.stt = setup.voice.stt || data.settings.sttModel;
+  setup.voice.tts = setup.voice.tts || data.settings.ttsModel;
+
+  const listening = el("div", "voice-setup__group");
+  listening.append(el("h3", "voice-setup__title", "How it hears you"));
+  listening.append(el("p", "voice-setup__lead",
+    "The recommended one is picked already — change it if you want another language or more accuracy."));
+  listening.append(modelChoiceGrid(data.catalog.stt, {
+    selected: setup.voice.stt,
+    installed: data.installed.stt,
+    onPick: (id) => { setup.voice.stt = id; renderVoiceStep(); },
+  }));
+  box.append(listening);
+
+  const speaking = el("div", "voice-setup__group");
+  speaking.append(el("h3", "voice-setup__title", "How it sounds"));
+  speaking.append(el("p", "voice-setup__lead",
+    "You can try every voice — and switch between them — from inside voice mode later."));
+  speaking.append(modelChoiceGrid(data.catalog.tts, {
+    selected: setup.voice.tts,
+    installed: data.installed.tts,
+    onPick: (id) => { setup.voice.tts = id; renderVoiceStep(); },
+  }));
+  box.append(speaking);
+
+  const stt = data.catalog.stt.find((m) => m.id === setup.voice.stt);
+  const tts = data.catalog.tts.find((m) => m.id === setup.voice.tts);
+  const pending = [stt, tts].filter(
+    (m, i) => m && !(i === 0 ? data.installed.stt : data.installed.tts).includes(m.id));
+  const total = Math.round(
+    (pending.reduce((sum, m) => sum + m.sizeMb, 0)
+      + (data.installed.vad.length ? 0 : 0.6)) * 10) / 10;
+
+  const summary = el("div", "callout");
+  summary.append(el("strong", null, total > 0
+    ? `${total} MB downloads in the background`
+    : "Nothing left to download"));
+  summary.append(document.createTextNode(total > 0
+    ? "Only the two you picked, plus a 0.6 MB turn detector. You can start "
+      + "using ArcBot straight away — voice mode switches on when they arrive."
+    : "Everything these choices need is already on this machine."));
+  box.append(summary);
+}
+
 function renderToolsetPicker() {
   const grid = $("toolsetPicker");
   grid.innerHTML = "";
@@ -1655,6 +2016,7 @@ $("nextBtn").addEventListener("click", async () => {
   }
 
   $("nextBtn").disabled = true;
+  $("nextBtn").textContent = "Saving…";
   try {
     const result = await post("/api/settings", {
       workspace: setup.draft.workspace,
@@ -1665,16 +2027,50 @@ $("nextBtn").addEventListener("click", async () => {
     });
     state.settings = result.settings;
     applySettings();
+
+    /* Setup is finished the moment it is saved. The wizard closes here and
+       nothing below can reopen it — a slow or failed download must never cost
+       the user their configuration. */
     $("setup").hidden = true;
     $("app").hidden = false;
     trace.reset();
     toast("You're set up. Ask ArcBot to do something.", "success");
+
+    if (setup.voice?.enabled) startVoiceDownload();
   } catch (exc) {
     error.textContent = String(exc.message);
   } finally {
     $("nextBtn").disabled = false;
+    $("nextBtn").textContent = "Start using ArcBot";
   }
 });
+
+/** Kick off the model download and let the user get on with things. */
+async function startVoiceDownload() {
+  try {
+    await post("/api/voice/settings", {
+      enabled: true, sttModel: setup.voice.stt, ttsModel: setup.voice.tts,
+    });
+    const result = await post("/api/voice/download", {});
+    renderVoiceDock(result.download);
+  } catch (exc) {
+    toast(`Voice models could not be downloaded: ${exc.message}`, "error", 10000);
+  }
+}
+
+/**
+ * Pick a download back up after a reload.
+ *
+ * Only asked for when voice mode is on, so a user who never wanted it never
+ * causes a request about it.
+ */
+async function restoreVoiceDownload() {
+  if (!state.settings.voice?.enabled) return;
+  try {
+    const data = await api("/api/voice");
+    renderVoiceDock(data.download);
+  } catch { /* the dock is a nicety, not a requirement */ }
+}
 
 const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -1707,9 +2103,11 @@ async function boot() {
   } else {
     $("app").hidden = false;
     renderEmptyState();
+    restoreVoiceDownload();
   }
 
   connect();
+  initVoiceControls();
   autosize();
   input.focus();
 }

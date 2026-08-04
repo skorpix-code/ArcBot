@@ -56,6 +56,8 @@ class Agent:
         )
         self.registry = ToolRegistry()
         self.mcp = MCPBridge(self.registry)
+        #: Live voice conversation, created only when the user starts one.
+        self.voice: Any = None
         self.terminal = TerminalManager()
         self.provider: Provider | None = None
         self.session: Session | None = None
@@ -225,6 +227,8 @@ class Agent:
     async def stop(self) -> None:
         """Cancel the running turn and any command it started."""
         self._cancelled = True
+        if self.voice is not None:
+            await self.voice.stop_speaking()
         self.broker.cancel_all("deny")
         await self.terminal.interrupt()
         task = self._turn_task
@@ -271,6 +275,8 @@ class Agent:
             await self.bus.emit(E.ERROR, {"message": f"Something went wrong: {exc}"})
         finally:
             await self._seal_pending_tool_calls("Turn ended before this tool ran.")
+            if self.voice is not None:
+                await self.voice.on_turn_end(self._last_answer())
             await self.bus.emit(E.TURN_END, {"turnId": turn_id, "reason": reason, **guard.summary()})
             await self.bus.emit(E.STATUS, {"state": "ready"})
             await self._emit_usage()
@@ -314,6 +320,8 @@ class Agent:
                 if chunk.text:
                     text_parts.append(chunk.text)
                     await self.bus.emit(E.TEXT_DELTA, {"id": message_id, "text": chunk.text})
+                    if self.voice is not None:
+                        await self.voice.on_text("".join(text_parts))
                 if chunk.thinking:
                     thinking_parts.append(chunk.thinking)
                     await self.bus.emit(E.THINKING_DELTA, {"id": message_id, "text": chunk.thinking})
@@ -538,6 +546,8 @@ class Agent:
                 segment.append(chunk.text)
                 all_text.append(chunk.text)
                 await self.bus.emit(E.TEXT_DELTA, {"id": current, "text": chunk.text})
+                if self.voice is not None:
+                    await self.voice.on_text("".join(all_text))
             if chunk.thinking:
                 current = await open_message()
                 thinking.append(chunk.thinking)
@@ -723,6 +733,13 @@ class Agent:
             ctxmod.context_usage(self.messages, await self._system_prompt(), window)
         )
         await self.bus.emit(E.USAGE, payload)
+
+    def _last_answer(self) -> str:
+        """The assistant text from this turn, for the voice session to finish speaking."""
+        for message in reversed(self.messages):
+            if message.get("role") == "assistant" and message.get("content"):
+                return str(message["content"])
+        return ""
 
     async def _notice(self, text: str, level: str = "warn") -> None:
         if text:

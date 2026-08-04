@@ -53,6 +53,15 @@ class E:
     NOTICE = "notice"                 # {level, text}
     SHUTDOWN = "shutdown"             # {reason}   — the app is closing
     OPEN_SETTINGS = "open.settings"   # {panel}    — show the user a panel
+
+    # voice mode
+    VOICE_READY = "voice.ready"           # {sampleRate, captions}
+    VOICE_STATE = "voice.state"           # {state: idle|listening|thinking|speaking}
+    VOICE_TRANSCRIPT = "voice.transcript" # {text, elapsedMs, audioSeconds}
+    VOICE_SPEAK = "voice.speak"           # {text, sampleRate, samples[]}
+    VOICE_STOP_AUDIO = "voice.stop"       # cut playback now (barge-in / stop)
+    VOICE_BARGE = "voice.barge"           # the user interrupted
+    VOICE_DOWNLOAD = "voice.download"     # {modelId, progress, label}
     ERROR = "error"                   # {message, detail, recoverable}
     CONFIG = "config"                 # {settings}
 

@@ -44,6 +44,15 @@
         <span class="status__text" id="statusText">Ready</span>
       </div>
 
+      <button class="try-voice" id="tryVoiceBtn" type="button"
+        title="Talk to ArcBot instead of typing (Ctrl+Shift+V)">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+          stroke-width="1.7" stroke-linecap="round">
+          <rect x="9" y="3" width="6" height="11" rx="3"/>
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+        </svg>
+        <span>Try voice mode</span>
+      </button>
       <button class="icon-btn" id="themeBtn" type="button" title="Switch theme" aria-label="Switch theme">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5"
           stroke="currentColor" stroke-width="1.6"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17Z"
@@ -131,6 +140,14 @@
               autocomplete="off" spellcheck="false"></textarea>
             <div class="composer__actions">
               <span class="composer__hint" id="composerHint">Enter to send · Shift+Enter for a new line</span>
+              <button class="icon-btn icon-btn--voice" id="voiceBtn" type="button"
+                title="Voice mode (Ctrl+Shift+V)" aria-label="Voice mode" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor"
+                  stroke-width="1.7" stroke-linecap="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3"/>
+                  <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+                </svg>
+              </button>
               <button class="send" id="sendBtn" type="button" title="Send">
                 <span class="send__glyph" aria-hidden="true">→</span>
               </button>
@@ -151,7 +168,7 @@
         <svg class="mark mark--lg" viewBox="0 0 24 24" aria-hidden="true" fill="none"><path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="18" r="1.9" fill="currentColor"/></svg>
         <div>
           <h1 class="setup__title">Set up ArcBot</h1>
-          <p class="setup__sub">Four choices. You can change any of them later.</p>
+          <p class="setup__sub">A few choices. You can change any of them later.</p>
         </div>
       </header>
 
@@ -234,6 +251,19 @@
         <div class="toolset-cards" id="toolsetPicker"></div>
       </section>
 
+      <!-- step 5: voice -->
+      <section class="step" data-step="4" hidden>
+        <h2 class="step__title">Talk to it?</h2>
+        <p class="step__lead">
+          Voice mode lets you use ArcBot hands-free — it does everything it does in
+          text, you just say it instead. Speech runs on your machine, so it needs a
+          one-off download. Skip this and nothing is downloaded.
+        </p>
+
+        <div class="modes" id="voiceChoice"></div>
+        <div class="voice-setup" id="voiceSetupModels" hidden></div>
+      </section>
+
       <footer class="setup__foot">
         <button class="btn btn--ghost" id="backBtn" type="button" hidden>Back</button>
         <div class="setup__foot-spacer"></div>
@@ -260,6 +290,62 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════ voice mode ═══════════════════════════ -->
+  <div class="voice" id="voiceStage" data-state="idle" hidden>
+    <canvas class="voice__field" id="voiceCanvas" aria-hidden="true"></canvas>
+
+    <div class="voice__hud">
+      <div class="voice__state">
+        <span class="voice__pip" aria-hidden="true"></span>
+        <span id="voiceStateLabel">Listening</span>
+      </div>
+
+      <div class="voice__download" id="voiceDownload" hidden>
+        <div class="voice__download-bar"><div id="voiceDownloadFill"></div></div>
+        <span id="voiceDownloadLabel">Downloading…</span>
+      </div>
+    </div>
+
+    <div class="voice__captions" id="voiceCaptions" aria-live="polite"></div>
+
+
+    <!-- Voice picker, over the field so you never leave the conversation. -->
+    <div class="picker" id="voicePicker" hidden>
+      <header class="picker__head">
+        <h2>Choose a voice</h2>
+        <button class="icon-btn" id="voicePickClose" type="button" aria-label="Close">×</button>
+      </header>
+      <div class="picker__body" id="voicePickerBody"></div>
+    </div>
+
+    <div class="voice__actions">
+      <button class="btn btn--sm" id="voicePickBtn" type="button">Change voice</button>
+      <button class="btn btn--sm" id="voiceInterrupt" type="button">Stop talking</button>
+      <button class="btn btn--sm btn--ghost" id="voiceClose" type="button">Leave voice mode</button>
+    </div>
+
+  </div>
+
+  <!-- Background model downloads.  Sits above everything, including setup, so
+       the user can get on with their work while models arrive. -->
+  <aside class="dock" id="voiceDock" hidden aria-live="polite">
+    <header class="dock__head">
+      <span class="dock__spark" id="voiceDockSpark" aria-hidden="true"></span>
+      <div class="dock__heading">
+        <strong class="dock__title" id="voiceDockTitle">Downloading voice models</strong>
+        <span class="dock__sub" id="voiceDockSub"></span>
+      </div>
+      <button class="icon-btn dock__dismiss" id="voiceDockClose" type="button"
+        title="Dismiss" aria-label="Dismiss">×</button>
+    </header>
+    <div class="dock__items" id="voiceDockItems"></div>
+    <footer class="dock__foot" id="voiceDockFoot" hidden>
+      <button class="btn btn--sm btn--primary" id="voiceDockStart" type="button">
+        Start voice mode
+      </button>
+    </footer>
+  </aside>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script>window.ARCBOT_TOKEN = "__ARCBOT_TOKEN__";</script>
@@ -267,6 +353,7 @@
   <script src="/static/highlight.min.js"></script>
   <script src="/static/xterm.min.js"></script>
   <script src="/static/xterm-addon-fit.min.js"></script>
+  <script src="/static/voice.js"></script>
   <script src="/static/arcbot.js"></script>
 </body>
 
